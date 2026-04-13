@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build
+dist/
+build/
+.out/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Docker
+*.log
+docker-compose.override.yml
+
+# Backend
+server/node_modules/
+server/.env
+
+# Frontend
+Parking_frontend/node_modules/
+Parking_frontend/.env
+Parking_frontend/dist/
+
+# Database
+*.sqlite
+*.sqlite3
