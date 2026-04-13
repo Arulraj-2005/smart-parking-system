@@ -33,38 +33,17 @@ jobs:
         node-version: '18'
     
     - name: Install Docker Compose
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y docker-compose
+      run: sudo apt-get update && sudo apt-get install -y docker-compose
     
-    - name: Clean up old containers
-      run: |
-        docker stop $(docker ps -aq) 2>/dev/null || true
-        docker rm $(docker ps -aq) 2>/dev/null || true
-    
-    - name: Build Docker Images
-      run: |
-        docker-compose build
-    
-    - name: Run Docker Containers
+    - name: Build and Run Containers
       run: |
         docker-compose up -d
-        echo "Waiting for services to initialize..."
-        sleep 15
-        
-        echo "=== Container Status ==="
+        sleep 10
         docker-compose ps
-        
-        echo "=== PostgreSQL Logs ==="
-        docker-compose logs postgres --tail=50
-        
-        echo "=== Backend Logs ==="
-        docker-compose logs backend --tail=50
-        
-        echo "=== Testing API ==="
-        curl -v http://localhost:5000/api/health || echo "API not responding"
+        docker-compose logs backend
+        docker-compose logs postgres
+        curl http://localhost:5000/api/health || echo "Health check failed"
     
     - name: Cleanup
       if: always()
-      run: |
-        docker-compose down
+      run: docker-compose down

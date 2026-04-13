@@ -1,13 +1,54 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import authRoutes from './routes/auth.js';
-import parkingRoutes from './routes/parking.js';
-import vehicleRoutes from './routes/vehicles.js';
-import analyticsRoutes from './routes/analytics.js';
-import { authenticateToken } from './middleware/auth.js';
 
 dotenv.config();
+
+console.log('🔧 Loading modules...');
+
+// Try to import routes with error handling
+let authRoutes, parkingRoutes, vehicleRoutes, analyticsRoutes, authenticateToken;
+
+try {
+  authRoutes = (await import('./routes/auth.js')).default;
+  console.log('✅ Auth routes loaded');
+} catch (err) {
+  console.error('❌ Failed to load auth routes:', err.message);
+  process.exit(1);
+}
+
+try {
+  parkingRoutes = (await import('./routes/parking.js')).default;
+  console.log('✅ Parking routes loaded');
+} catch (err) {
+  console.error('❌ Failed to load parking routes:', err.message);
+  process.exit(1);
+}
+
+try {
+  vehicleRoutes = (await import('./routes/vehicles.js')).default;
+  console.log('✅ Vehicle routes loaded');
+} catch (err) {
+  console.error('❌ Failed to load vehicle routes:', err.message);
+  process.exit(1);
+}
+
+try {
+  analyticsRoutes = (await import('./routes/analytics.js')).default;
+  console.log('✅ Analytics routes loaded');
+} catch (err) {
+  console.error('❌ Failed to load analytics routes:', err.message);
+  process.exit(1);
+}
+
+try {
+  const authMiddleware = await import('./middleware/auth.js');
+  authenticateToken = authMiddleware.authenticateToken;
+  console.log('✅ Auth middleware loaded');
+} catch (err) {
+  console.error('❌ Failed to load auth middleware:', err.message);
+  process.exit(1);
+}
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -30,7 +71,7 @@ app.get('/api/health', (req, res) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  console.error('❌ Error:', err.stack);
   res.status(500).json({ 
     success: false, 
     message: 'Something went wrong!',

@@ -1,73 +1,72 @@
-services:
-  # PostgreSQL Database
-  postgres:
-    image: postgres:15
-    container_name: smart_parking_db
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: smart_parking
-    # REMOVE the ports line completely for CI/CD
-    # ports:
-    #   - "5433:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./Parking_frontend/server/config/schema.sql:/docker-entrypoint-initdb.d/1-schema.sql
-    networks:
-      - parking_network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+name: Smart Parking CI/CD Pipeline
 
-  # Backend API
-  backend:
-    build:
-      context: ./Parking_frontend
-      dockerfile: Dockerfile.backend
-    container_name: smart_parking_backend
-    environment:
-      NODE_ENV: development
-      PORT: 5000
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: postgres
-      DB_PASSWORD: postgres
-      DB_NAME: smart_parking
-      JWT_SECRET: test_secret_key_for_ci
-    ports:
-      - "5000:5000"
-    depends_on:
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
       postgres:
-        condition: service_healthy
-    networks:
-      - parking_network
-    volumes:
-      - ./Parking_frontend/server:/app/server
-      - /app/node_modules
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: parking_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
 
-  # Frontend (Vite + React)
-  frontend:
-    build:
-      context: ./Parking_frontend
-      dockerfile: Dockerfile
-    container_name: smart_parking_frontend
-    ports:
-      - "5173:5173"
-    depends_on:
-      - backend
-    networks:
-      - parking_network
-    environment:
-      VITE_API_URL: http://localhost:5000/api
-    volumes:
-      - ./Parking_frontend:/app
-      - /app/node_modules
-
-networks:
-  parking_network:
-    driver: bridge
-
-volumes:
-  postgres_data:
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+    
+    - name: Install Docker Compose
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y docker-compose
+    
+    - name: Clean up old containers
+      run: |
+        docker stop $(docker ps -aq) 2>/dev/null || true
+        docker rm $(docker ps -aq) 2>/dev/null || true
+    
+    - name: Build Docker Images
+      run: |
+        docker-compose build
+    
+    - name: Run Docker Containers
+      run: |
+        docker-compose up -d
+        echo "Waiting for services to initialize..."
+        sleep 20
+        
+        echo "=== Container Status ==="
+        docker-compose ps
+        
+        echo "=== PostgreSQL Logs ==="
+        docker-compose logs postgres
+        
+        echo "=== Backend Logs ==="
+        docker-compose logs backend
+    
+    - name: Test API Health
+      run: |
+        echo "Testing API endpoint..."
+        curl -v http://localhost:5000/api/health || echo "API not responding"
+    
+    - name: Cleanup
+      if: always()
+      run: |
+        docker-compose down
