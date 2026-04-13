@@ -32,6 +32,16 @@ jobs:
       with:
         node-version: '18'
     
+    - name: Install Docker Compose
+      run: |
+        sudo apt-get update
+        sudo apt-get install docker-compose-plugin
+    
+    - name: Verify Docker Compose
+      run: |
+        docker --version
+        docker compose version
+    
     - name: Install Backend Dependencies
       run: |
         cd Parking_frontend/server
@@ -46,11 +56,11 @@ jobs:
     
     - name: Build Docker Images
       run: |
-        docker-compose build
+        docker compose build
     
     - name: Run Docker Containers
       run: |
-        docker-compose up -d
+        docker compose up -d
         sleep 10
     
     - name: Test API Health
@@ -60,8 +70,13 @@ jobs:
     
     - name: Show Docker Logs
       run: |
-        docker-compose logs
+        docker compose logs
       continue-on-error: true
+    
+    - name: Cleanup
+      if: always()
+      run: |
+        docker compose down
 
   deploy:
     needs: test
@@ -77,9 +92,3 @@ jobs:
         echo "Repository: ${{ github.repository }}"
         echo "Branch: ${{ github.ref_name }}"
         echo "Commit: ${{ github.sha }}"
-        echo ""
-        echo "To deploy to production, add your deployment commands here:"
-        echo "- AWS ECS"
-        echo "- Google Cloud Run"
-        echo "- Azure Container Instances"
-        echo "- Or your own VPS"
