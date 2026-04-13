@@ -15,7 +15,7 @@ jobs:
         image: postgres:15
         env:
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: parking_db
+          POSTGRES_DB: smart_parking
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -46,27 +46,23 @@ jobs:
       run: |
         docker-compose build
     
-    - name: Run Containers and Capture Logs
+    - name: Run Docker Containers
       run: |
         docker-compose up -d
         echo "Waiting for services to initialize..."
-        sleep 10
+        sleep 15
         
-        echo "=== PostgreSQL Status ==="
-        docker-compose exec -T postgres pg_isready -U postgres || echo "PostgreSQL not ready"
+        echo "=== Container Status ==="
+        docker-compose ps
         
-        echo "=== Backend Container Logs ==="
-        docker-compose logs backend --tail=100
+        echo "=== PostgreSQL Logs ==="
+        docker-compose logs postgres --tail=50
         
-        echo "=== Backend Container Status ==="
-        docker inspect smart_parking_backend --format='{{.State.Status}} {{.State.Error}}'
-    
-    - name: Test Backend API
-      run: |
-        echo "Testing API endpoint..."
+        echo "=== Backend Logs ==="
+        docker-compose logs backend --tail=50
+        
+        echo "=== Testing API ==="
         curl -v http://localhost:5000/api/health || echo "API not responding"
-        echo "=== Complete Backend Logs ==="
-        docker-compose logs backend
     
     - name: Cleanup
       if: always()
