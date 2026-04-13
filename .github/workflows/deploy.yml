@@ -15,7 +15,7 @@ jobs:
         image: postgres:15
         env:
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: test_db
+          POSTGRES_DB: parking_db
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -37,46 +37,38 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y docker-compose
     
-    - name: Verify Docker Compose
+    - name: Clean up old containers
       run: |
-        docker --version
-        docker-compose --version
+        docker stop $(docker ps -aq) 2>/dev/null || true
+        docker rm $(docker ps -aq) 2>/dev/null || true
     
     - name: Build Docker Images
       run: |
         docker-compose build
     
-    - name: Run Docker Containers
+    - name: Run Containers and Capture Logs
       run: |
         docker-compose up -d
-        sleep 15
+        echo "Waiting for services to initialize..."
+        sleep 10
+        
+        echo "=== PostgreSQL Status ==="
+        docker-compose exec -T postgres pg_isready -U postgres || echo "PostgreSQL not ready"
+        
+        echo "=== Backend Container Logs ==="
+        docker-compose logs backend --tail=100
+        
+        echo "=== Backend Container Status ==="
+        docker inspect smart_parking_backend --format='{{.State.Status}} {{.State.Error}}'
     
-    - name: Test API Health
+    - name: Test Backend API
       run: |
-        curl -f http://localhost:5000/api/health || echo "API not ready yet"
-      continue-on-error: true
-    
-    - name: Show Docker Logs
-      run: |
-        docker-compose logs
-      continue-on-error: true
+        echo "Testing API endpoint..."
+        curl -v http://localhost:5000/api/health || echo "API not responding"
+        echo "=== Complete Backend Logs ==="
+        docker-compose logs backend
     
     - name: Cleanup
       if: always()
       run: |
         docker-compose down
-
-  deploy:
-    needs: test
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Deploy Notification
-      run: |
-        echo "✅ Deployment ready!"
-        echo "Repository: ${{ github.repository }}"
-        echo "Branch: ${{ github.ref_name }}"
-        echo "Commit: ${{ github.sha }}"

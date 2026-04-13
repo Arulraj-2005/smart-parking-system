@@ -2,14 +2,11 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Copy package files (they are in the root of Parking_frontend, not in server folder)
-COPY package*.json ./
+# Copy everything from Parking_frontend
+COPY . .
 
 # Install dependencies
-RUN npm install --only=production
-
-# Copy server code
-COPY server/ ./server/
+RUN npm install --production
 
 # Expose port
 EXPOSE 5000
