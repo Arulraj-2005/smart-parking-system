@@ -1,11 +1,8 @@
--- Create database (run separately if needed)
-CREATE DATABASE smart_parking;
-
--- Connect to DB
+-- Connect to DB (run this manually in psql if needed)
 -- \c smart_parking
 
 -- USERS
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
   username VARCHAR(50) UNIQUE NOT NULL,
   email VARCHAR(100) UNIQUE NOT NULL,
@@ -19,7 +16,7 @@ CREATE TABLE users (
 );
 
 -- ZONES
-CREATE TABLE zones (
+CREATE TABLE IF NOT EXISTS zones (
   id SERIAL PRIMARY KEY,
   name VARCHAR(10) UNIQUE NOT NULL,
   description VARCHAR(255),
@@ -29,7 +26,7 @@ CREATE TABLE zones (
 );
 
 -- PARKING SPOTS
-CREATE TABLE parking_spots (
+CREATE TABLE IF NOT EXISTS parking_spots (
   id SERIAL PRIMARY KEY,
   spot_number VARCHAR(10) UNIQUE NOT NULL,
   zone_id INT REFERENCES zones(id) ON DELETE CASCADE,
@@ -41,7 +38,7 @@ CREATE TABLE parking_spots (
 );
 
 -- VEHICLES
-CREATE TABLE vehicles (
+CREATE TABLE IF NOT EXISTS vehicles (
   id SERIAL PRIMARY KEY,
   user_id INT REFERENCES users(id) ON DELETE SET NULL,
   license_plate VARCHAR(20) UNIQUE NOT NULL,
@@ -54,7 +51,7 @@ CREATE TABLE vehicles (
 );
 
 -- PARKING SESSIONS
-CREATE TABLE parking_sessions (
+CREATE TABLE IF NOT EXISTS parking_sessions (
   id SERIAL PRIMARY KEY,
   vehicle_id INT REFERENCES vehicles(id) ON DELETE CASCADE,
   spot_id INT REFERENCES parking_spots(id) ON DELETE CASCADE,
@@ -69,7 +66,7 @@ CREATE TABLE parking_sessions (
 );
 
 -- RESERVATIONS
-CREATE TABLE reservations (
+CREATE TABLE IF NOT EXISTS reservations (
   id SERIAL PRIMARY KEY,
   user_id INT REFERENCES users(id) ON DELETE CASCADE,
   spot_id INT REFERENCES parking_spots(id) ON DELETE CASCADE,
@@ -83,7 +80,7 @@ CREATE TABLE reservations (
 );
 
 -- AI PREDICTIONS
-CREATE TABLE ai_predictions (
+CREATE TABLE IF NOT EXISTS ai_predictions (
   id SERIAL PRIMARY KEY,
   zone_id INT REFERENCES zones(id) ON DELETE CASCADE,
   prediction_date DATE NOT NULL,
@@ -95,7 +92,7 @@ CREATE TABLE ai_predictions (
 );
 
 -- AUDIT LOGS
-CREATE TABLE audit_logs (
+CREATE TABLE IF NOT EXISTS audit_logs (
   id SERIAL PRIMARY KEY,
   user_id INT REFERENCES users(id) ON DELETE SET NULL,
   action VARCHAR(100) NOT NULL,
@@ -106,14 +103,17 @@ CREATE TABLE audit_logs (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- INSERT ZONES
-INSERT INTO zones (name, description, total_spots) VALUES
-('A', 'Main Entrance Zone', 12),
-('B', 'North Wing Zone', 12),
-('C', 'South Wing Zone', 12),
-('D', 'EV Charging Zone', 12);
+-- INSERT ZONES (only if not already inserted)
+INSERT INTO zones (name, description, total_spots)
+SELECT * FROM (VALUES 
+  ('A', 'Main Entrance Zone', 12),
+  ('B', 'North Wing Zone', 12),
+  ('C', 'South Wing Zone', 12),
+  ('D', 'EV Charging Zone', 12)
+) AS v(name, description, total_spots)
+WHERE NOT EXISTS (SELECT 1 FROM zones WHERE name = v.name);
 
--- INSERT PARKING SPOTS (PostgreSQL version)
+-- INSERT PARKING SPOTS (only if not already inserted)
 INSERT INTO parking_spots (spot_number, zone_id, spot_type, hourly_rate)
 SELECT 
   z.name || '-' || LPAD(n::text, 2, '0'),
@@ -128,15 +128,10 @@ SELECT
     ELSE 5.00
   END
 FROM zones z,
-generate_series(1,12) AS n;
+generate_series(1,12) AS n
+WHERE NOT EXISTS (SELECT 1 FROM parking_spots LIMIT 1);
 
--- ADMIN USER
+-- ADMIN USER (only if not already inserted)
 INSERT INTO users (username, email, password_hash, full_name, role, phone)
-VALUES (
-  'admin',
-  'admin@smartpark.com',
-  '$2a$10$rQZ9vXJxL8K5qN3mH7pO2eYwZ8xK4jL6mN9oP1qR3sT5uV7wX9yZ',
-  'System Administrator',
-  'admin',
-  '555-0000'
-);
+SELECT 'admin', 'admin@smartpark.com', '$2a$10$rQZ9vXJxL8K5qN3mH7pO2eYwZ8xK4jL6mN9oP1qR3sT5uV7wX9yZ', 'System Administrator', 'admin', '555-0000'
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'admin');
