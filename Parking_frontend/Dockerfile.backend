@@ -2,10 +2,10 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Copy package files
-COPY server/package*.json ./
+# Copy package files (they are in the root of Parking_frontend, not in server folder)
+COPY package*.json ./
 
-# Install dependencies (use npm install instead of npm ci)
+# Install dependencies
 RUN npm install --only=production
 
 # Copy server code
