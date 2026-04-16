@@ -5,7 +5,7 @@ import pool from '../config/database.js';
 
 const router = express.Router();
 
-// 🔹 REGISTER (FIXED for your actual table)
+// 🔹 REGISTER (Fixed for Supabase table)
 router.post('/register', async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -34,12 +34,12 @@ router.post('/register', async (req, res) => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Insert user (matching your actual columns)
+    // Insert user with correct column names for Supabase
     const result = await pool.query(
-      `INSERT INTO users (name, email, password, role) 
-       VALUES ($1, $2, $3, $4) 
-       RETURNING id, name, email, role`,
-      [name, email, hashedPassword, 'USER']
+      `INSERT INTO users (username, email, password_hash, full_name, role) 
+       VALUES ($1, $2, $3, $4, $5) 
+       RETURNING id, username, email, full_name, role`,
+      [name, email, hashedPassword, name, 'authenticated']
     );
 
     const user = result.rows[0];
@@ -48,7 +48,7 @@ router.post('/register', async (req, res) => {
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
       process.env.JWT_SECRET || 'secret',
-      { expiresIn: '1d' }
+      { expiresIn: '7d' }
     );
 
     res.status(201).json({
@@ -57,7 +57,7 @@ router.post('/register', async (req, res) => {
       data: { 
         user: {
           id: user.id,
-          name: user.name,
+          name: user.full_name,
           email: user.email,
           role: user.role
         }, 
@@ -75,7 +75,7 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// 🔹 LOGIN (FIXED for your actual table)
+// 🔹 LOGIN (Fixed for Supabase table)
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -103,8 +103,8 @@ router.post('/login', async (req, res) => {
 
     const user = result.rows[0];
 
-    // Compare password (using 'password' column, not 'password_hash')
-    const isMatch = await bcrypt.compare(password, user.password);
+    // Compare password (using password_hash column)
+    const isMatch = await bcrypt.compare(password, user.password_hash);
 
     if (!isMatch) {
       return res.status(401).json({
@@ -117,7 +117,7 @@ router.post('/login', async (req, res) => {
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
       process.env.JWT_SECRET || 'secret',
-      { expiresIn: '1d' }
+      { expiresIn: '7d' }
     );
 
     res.json({
@@ -126,7 +126,7 @@ router.post('/login', async (req, res) => {
       data: {
         user: {
           id: user.id,
-          name: user.name,
+          name: user.full_name,
           email: user.email,
           role: user.role
         },
@@ -148,7 +148,7 @@ router.post('/login', async (req, res) => {
 router.get('/me', async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT id, name, email, role FROM users WHERE id = $1',
+      'SELECT id, full_name, email, role FROM users WHERE id = $1',
       [req.user.id]
     );
 
@@ -164,7 +164,7 @@ router.get('/me', async (req, res) => {
       data: {
         user: {
           id: result.rows[0].id,
-          name: result.rows[0].name,
+          name: result.rows[0].full_name,
           email: result.rows[0].email,
           role: result.rows[0].role
         }
