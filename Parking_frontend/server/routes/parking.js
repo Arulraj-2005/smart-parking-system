@@ -122,30 +122,28 @@ router.post('/book', authenticateToken, async (req, res) => {
     const { spotId, licensePlate, durationHours } = req.body;
     const userId = req.user.id;
 
-    // Check if spot exists and is available
+    console.log('Booking:', { spotId, licensePlate, durationHours, userId });
+
+    // Check if spot is available
     const spotCheck = await pool.query(
-      'SELECT * FROM parking_spots WHERE id = $1 AND is_occupied = false AND is_reserved = false',
+      'SELECT * FROM parking_spots WHERE id = $1 AND is_occupied = false',
       [spotId]
     );
 
     if (spotCheck.rows.length === 0) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Spot not available' 
-      });
+      return res.status(400).json({ success: false, message: 'Spot not available' });
     }
 
-    // Calculate times
     const entryTime = new Date();
     const exitTime = new Date(entryTime.getTime() + durationHours * 60 * 60 * 1000);
     const durationMinutes = durationHours * 60;
 
-    // Create parking session (using your actual column names)
+    // Insert with license_plate
     const session = await pool.query(
-      `INSERT INTO parking_sessions (spot_id, user_id, entry_time, exit_time, duration_minutes, payment_status)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING *`,
-      [spotId, userId, entryTime, exitTime, durationMinutes, 'pending']
+      `INSERT INTO parking_sessions (spot_id, user_id, entry_time, exit_time, duration_minutes, payment_status, license_plate)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id`,
+      [spotId, userId, entryTime, exitTime, durationMinutes, 'pending', licensePlate]
     );
 
     // Mark spot as occupied
@@ -154,9 +152,11 @@ router.post('/book', authenticateToken, async (req, res) => {
       [spotId]
     );
 
+    console.log('Booking created, ID:', session.rows[0].id);
+
     res.json({ 
       success: true, 
-      data: session.rows[0],
+      data: { id: session.rows[0].id, duration_hours: durationHours },
       message: 'Spot booked successfully'
     });
 
@@ -249,36 +249,56 @@ router.post('/extend', authenticateToken, async (req, res) => {
 });
 
 // Get user's active sessions
+// Get user's sessions (ALL sessions, not just active)
 router.get('/sessions/my', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT ps.*, pz.name as zone_name, psp.spot_number,
-             psp.spot_type, psp.hourly_rate
+      SELECT 
+        ps.id,
+        ps.spot_id,
+        ps.user_id,
+        ps.entry_time,
+        ps.exit_time as end_time,
+        ps.duration_minutes,
+        ps.total_amount,
+        ps.payment_status,
+        ps.license_plate,
+        psp.spot_number,
+        pz.name as zone_name,
+        psp.hourly_rate,
+        CASE 
+          WHEN ps.duration_minutes IS NOT NULL THEN ROUND(ps.duration_minutes / 60.0, 1)
+          ELSE 1
+        END as duration_hours
       FROM parking_sessions ps
       JOIN parking_spots psp ON ps.spot_id = psp.id
       JOIN zones pz ON psp.zone_id = pz.id
-      WHERE ps.user_id = $1 AND ps.exit_time IS NULL
+      WHERE ps.user_id = $1
       ORDER BY ps.entry_time DESC
     `, [req.user.id]);
 
-    // Transform to match frontend expected format
+    console.log('Sessions found:', result.rows.length);
+
     const sessions = result.rows.map(s => ({
       id: s.id,
+      spot_id: s.spot_id,
       spot_number: s.spot_number,
       zone_name: s.zone_name,
       entry_time: s.entry_time,
-      end_time: s.exit_time,
-      duration_hours: Math.ceil(s.duration_minutes / 60),
+      end_time: s.end_time,
+      duration_hours: s.duration_hours,
       duration_minutes: s.duration_minutes,
       license_plate: s.license_plate || 'N/A',
       total_amount: s.total_amount,
-      payment_status: s.payment_status
+      payment_status: s.payment_status,
+      hourly_rate: s.hourly_rate,
+      is_active: s.end_time === null
     }));
 
     res.json({ success: true, data: { sessions } });
   } catch (error) {
     console.error('Get my sessions error:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch sessions' });
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
