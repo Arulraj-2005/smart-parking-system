@@ -94,7 +94,7 @@ router.get('/spots/:id', async (req, res) => {
 });
 
 // Get user's reservations
-router.get('/reservations/my', authenticateToken, async (req, res) => {
+router.get('/reservations/my', async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT r.*, ps.spot_number, z.name as zone_name, v.license_plate
@@ -122,8 +122,6 @@ router.post('/book', authenticateToken, async (req, res) => {
     const { spotId, licensePlate, durationHours } = req.body;
     const userId = req.user.id;
 
-    console.log('Booking request:', { spotId, licensePlate, durationHours, userId });
-
     // Check if spot exists and is available
     const spotCheck = await pool.query(
       'SELECT * FROM parking_spots WHERE id = $1 AND is_occupied = false AND is_reserved = false',
@@ -142,12 +140,12 @@ router.post('/book', authenticateToken, async (req, res) => {
     const exitTime = new Date(entryTime.getTime() + durationHours * 60 * 60 * 1000);
     const durationMinutes = durationHours * 60;
 
-    // Create parking session with license_plate
+    // Create parking session (using your actual column names)
     const session = await pool.query(
-      `INSERT INTO parking_sessions (spot_id, user_id, entry_time, exit_time, duration_minutes, payment_status, license_plate)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id, spot_id, user_id, entry_time, exit_time, duration_minutes, payment_status, license_plate`,
-      [spotId, userId, entryTime, exitTime, durationMinutes, 'pending', licensePlate]
+      `INSERT INTO parking_sessions (spot_id, user_id, entry_time, exit_time, duration_minutes, payment_status)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      [spotId, userId, entryTime, exitTime, durationMinutes, 'pending']
     );
 
     // Mark spot as occupied
@@ -158,14 +156,7 @@ router.post('/book', authenticateToken, async (req, res) => {
 
     res.json({ 
       success: true, 
-      data: {
-        id: session.rows[0].id,
-        spot_id: spotId,
-        entry_time: entryTime,
-        end_time: exitTime,
-        duration_hours: durationHours,
-        license_plate: licensePlate
-      },
+      data: session.rows[0],
       message: 'Spot booked successfully'
     });
 
@@ -181,29 +172,28 @@ router.post('/checkout', authenticateToken, async (req, res) => {
     const { sessionId } = req.body;
     const userId = req.user.id;
     
-    console.log('Checkout request:', { sessionId, userId });
-    
-    // Get the session with spot details
-    const sessionResult = await pool.query(
-      `SELECT ps.*, psp.hourly_rate, psp.spot_number 
-       FROM parking_sessions ps
-       JOIN parking_spots psp ON ps.spot_id = psp.id
-       WHERE ps.id = $1 AND ps.user_id = $2 AND ps.exit_time IS NULL`,
+    const session = await pool.query(
+      'SELECT * FROM parking_sessions WHERE id = $1 AND user_id = $2 AND exit_time IS NULL',
       [sessionId, userId]
     );
     
-    if (sessionResult.rows.length === 0) {
+    if (session.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Active session not found' });
     }
     
-    const session = sessionResult.rows[0];
     const exitTime = new Date();
-    const durationMs = exitTime - new Date(session.entry_time);
+    const durationMs = exitTime - session.rows[0].entry_time;
     const durationMinutes = Math.max(60, Math.ceil(durationMs / (60 * 1000)));
     const durationHours = Math.ceil(durationMinutes / 60);
-    const totalAmount = durationHours * session.hourly_rate;
     
-    // Update session with checkout info
+    // Get spot rate
+    const spot = await pool.query(
+      'SELECT hourly_rate FROM parking_spots WHERE id = $1',
+      [session.rows[0].spot_id]
+    );
+    
+    const totalAmount = durationHours * spot.rows[0].hourly_rate;
+    
     await pool.query(
       `UPDATE parking_sessions 
        SET exit_time = $1, duration_minutes = $2, total_amount = $3, payment_status = 'paid'
@@ -214,7 +204,7 @@ router.post('/checkout', authenticateToken, async (req, res) => {
     // Free up the spot
     await pool.query(
       'UPDATE parking_spots SET is_occupied = false WHERE id = $1',
-      [session.spot_id]
+      [session.rows[0].spot_id]
     );
     
     res.json({ success: true, message: 'Checked out successfully', data: { totalAmount } });
@@ -230,29 +220,25 @@ router.post('/extend', authenticateToken, async (req, res) => {
     const { spotId, extraHours } = req.body;
     const userId = req.user.id;
     
-    console.log('Extend request:', { spotId, extraHours, userId });
-    
-    // Find active session for this spot
-    const sessionResult = await pool.query(
+    const session = await pool.query(
       `SELECT * FROM parking_sessions 
        WHERE spot_id = $1 AND user_id = $2 AND exit_time IS NULL`,
       [spotId, userId]
     );
     
-    if (sessionResult.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'No active session found for this spot' });
+    if (session.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'No active session found' });
     }
     
-    const session = sessionResult.rows[0];
-    const newExitTime = new Date(session.exit_time);
+    const newExitTime = new Date(session.rows[0].exit_time);
     newExitTime.setHours(newExitTime.getHours() + extraHours);
-    const newDurationMinutes = session.duration_minutes + (extraHours * 60);
+    const newDurationMinutes = session.rows[0].duration_minutes + (extraHours * 60);
     
     await pool.query(
       `UPDATE parking_sessions 
        SET exit_time = $1, duration_minutes = $2
        WHERE id = $3`,
-      [newExitTime, newDurationMinutes, session.id]
+      [newExitTime, newDurationMinutes, session.rows[0].id]
     );
     
     res.json({ success: true, message: `Extended by ${extraHours} hours` });
@@ -262,52 +248,37 @@ router.post('/extend', authenticateToken, async (req, res) => {
   }
 });
 
-// Get user's all sessions (both active and completed)
+// Get user's active sessions
 router.get('/sessions/my', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT 
-        ps.id,
-        ps.spot_id,
-        ps.user_id,
-        ps.entry_time,
-        ps.exit_time as end_time,
-        ps.duration_minutes,
-        ps.total_amount,
-        ps.payment_status,
-        ps.license_plate,
-        psp.spot_number,
-        pz.name as zone_name,
-        psp.hourly_rate,
-        ROUND(ps.duration_minutes / 60.0, 1) as duration_hours
+      SELECT ps.*, pz.name as zone_name, psp.spot_number,
+             psp.spot_type, psp.hourly_rate
       FROM parking_sessions ps
       JOIN parking_spots psp ON ps.spot_id = psp.id
       JOIN zones pz ON psp.zone_id = pz.id
-      WHERE ps.user_id = $1
+      WHERE ps.user_id = $1 AND ps.exit_time IS NULL
       ORDER BY ps.entry_time DESC
     `, [req.user.id]);
 
     // Transform to match frontend expected format
     const sessions = result.rows.map(s => ({
       id: s.id,
-      spot_id: s.spot_id,
       spot_number: s.spot_number,
       zone_name: s.zone_name,
       entry_time: s.entry_time,
-      end_time: s.end_time,
-      duration_hours: s.duration_hours,
+      end_time: s.exit_time,
+      duration_hours: Math.ceil(s.duration_minutes / 60),
       duration_minutes: s.duration_minutes,
       license_plate: s.license_plate || 'N/A',
       total_amount: s.total_amount,
-      payment_status: s.payment_status,
-      hourly_rate: s.hourly_rate,
-      is_active: !s.end_time || new Date(s.end_time) > new Date()
+      payment_status: s.payment_status
     }));
 
     res.json({ success: true, data: { sessions } });
   } catch (error) {
     console.error('Get my sessions error:', error);
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: 'Failed to fetch sessions' });
   }
 });
 
