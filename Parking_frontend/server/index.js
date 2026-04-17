@@ -1,9 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-// FORCE DEPLOY - FIX req.body parsing v2
-import express from 'express';
-// ... rest of your code
 
 dotenv.config();
 
@@ -13,7 +10,8 @@ console.log('🔧 Loading modules...');
 let authRoutes, parkingRoutes, vehicleRoutes, analyticsRoutes, authenticateToken;
 
 try {
-  authRoutes = (await import('./routes/auth.js')).default;
+  const authModule = await import('./routes/auth.js');
+  authRoutes = authModule.default;
   console.log('✅ Auth routes loaded');
 } catch (err) {
   console.error('❌ Failed to load auth routes:', err.message);
@@ -21,7 +19,8 @@ try {
 }
 
 try {
-  parkingRoutes = (await import('./routes/parking.js')).default;
+  const parkingModule = await import('./routes/parking.js');
+  parkingRoutes = parkingModule.default;
   console.log('✅ Parking routes loaded');
 } catch (err) {
   console.error('❌ Failed to load parking routes:', err.message);
@@ -29,7 +28,8 @@ try {
 }
 
 try {
-  vehicleRoutes = (await import('./routes/vehicles.js')).default;
+  const vehicleModule = await import('./routes/vehicles.js');
+  vehicleRoutes = vehicleModule.default;
   console.log('✅ Vehicle routes loaded');
 } catch (err) {
   console.error('❌ Failed to load vehicle routes:', err.message);
@@ -37,7 +37,8 @@ try {
 }
 
 try {
-  analyticsRoutes = (await import('./routes/analytics.js')).default;
+  const analyticsModule = await import('./routes/analytics.js');
+  analyticsRoutes = analyticsModule.default;
   console.log('✅ Analytics routes loaded');
 } catch (err) {
   console.error('❌ Failed to load analytics routes:', err.message);
