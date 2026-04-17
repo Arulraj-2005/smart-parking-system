@@ -1,5 +1,4 @@
 
-// FORCE DEPLOY - CHECKOUT FIX v3
 import express from 'express';
 import pool from '../config/database.js';
 import { authenticateToken } from '../middleware/auth.js';
@@ -136,6 +135,7 @@ router.post('/book', authenticateToken, async (req, res) => {
 });
 
 // Check out from a spot (CHECKOUT)
+// Check out from a spot (CHECKOUT)
 router.post('/checkout', authenticateToken, async (req, res) => {
   try {
     const { sessionId } = req.body;
@@ -143,45 +143,57 @@ router.post('/checkout', authenticateToken, async (req, res) => {
     
     console.log('Checkout request:', { sessionId, userId });
     
-    // Find session without checking exit_time condition
+    // Find the active session
     const sessionResult = await pool.query(
-      `SELECT ps.*, psp.hourly_rate, psp.id as spot_id
+      `SELECT ps.*, psp.hourly_rate, psp.id as spot_id, psp.spot_number
        FROM parking_sessions ps
        JOIN parking_spots psp ON ps.spot_id = psp.id
-       WHERE ps.id = $1 AND ps.user_id = $2`,
+       WHERE ps.id = $1 AND ps.user_id = $2 AND ps.exit_time IS NULL`,
       [sessionId, userId]
     );
     
     if (sessionResult.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Session not found' });
+      return res.status(404).json({ success: false, message: 'Active session not found' });
     }
     
     const session = sessionResult.rows[0];
-    
-    // If already checked out
-    if (session.exit_time) {
-      return res.json({ success: true, message: 'Already checked out', data: { totalAmount: session.total_amount } });
-    }
-    
     const exitTime = new Date();
-    const durationMs = exitTime - new Date(session.entry_time);
+    const entryTime = new Date(session.entry_time);
+    const durationMs = exitTime - entryTime;
     const durationMinutes = Math.max(30, Math.ceil(durationMs / (60 * 1000)));
     const durationHours = Math.ceil(durationMinutes / 60);
     const totalAmount = durationHours * parseFloat(session.hourly_rate);
     
-    await pool.query(
+    // Update session with checkout info
+    const updateResult = await pool.query(
       `UPDATE parking_sessions 
-       SET exit_time = $1, duration_minutes = $2, total_amount = $3, payment_status = 'paid'
-       WHERE id = $4`,
+       SET exit_time = $1, 
+           duration_minutes = $2, 
+           total_amount = $3, 
+           payment_status = 'paid'
+       WHERE id = $4
+       RETURNING *`,
       [exitTime, durationMinutes, totalAmount, sessionId]
     );
     
+    console.log('Session updated:', updateResult.rows[0]);
+    
+    // Free up the spot
     await pool.query(
       'UPDATE parking_spots SET is_occupied = false WHERE id = $1',
       [session.spot_id]
     );
     
-    res.json({ success: true, message: 'Checked out successfully', data: { totalAmount } });
+    res.json({ 
+      success: true, 
+      message: 'Checked out successfully', 
+      data: { 
+        totalAmount, 
+        durationHours, 
+        exitTime,
+        session: updateResult.rows[0]
+      } 
+    });
   } catch (error) {
     console.error('Checkout error:', error);
     res.status(500).json({ success: false, message: error.message });
@@ -189,11 +201,15 @@ router.post('/checkout', authenticateToken, async (req, res) => {
 });
 
 // Extend a booking
+// Extend a booking
 router.post('/extend', authenticateToken, async (req, res) => {
   try {
     const { spotId, extraHours } = req.body;
     const userId = req.user.id;
     
+    console.log('Extend request:', { spotId, extraHours, userId });
+    
+    // Find active session for this spot
     const sessionResult = await pool.query(
       `SELECT * FROM parking_sessions 
        WHERE spot_id = $1 AND user_id = $2 AND exit_time IS NULL`,
@@ -201,12 +217,12 @@ router.post('/extend', authenticateToken, async (req, res) => {
     );
     
     if (sessionResult.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'No active session found' });
+      return res.status(404).json({ success: false, message: 'No active session found for this spot' });
     }
     
     const session = sessionResult.rows[0];
-    const newExitTime = new Date(session.exit_time);
-    newExitTime.setHours(newExitTime.getHours() + extraHours);
+    const currentExitTime = new Date(session.exit_time);
+    const newExitTime = new Date(currentExitTime.getTime() + extraHours * 60 * 60 * 1000);
     const newDurationMinutes = session.duration_minutes + (extraHours * 60);
     
     await pool.query(
@@ -216,7 +232,7 @@ router.post('/extend', authenticateToken, async (req, res) => {
       [newExitTime, newDurationMinutes, session.id]
     );
     
-    res.json({ success: true, message: `Extended by ${extraHours} hours` });
+    res.json({ success: true, message: `Extended by ${extraHours} hours`, data: { newExitTime, newDurationMinutes } });
   } catch (error) {
     console.error('Extend error:', error);
     res.status(500).json({ success: false, message: error.message });
