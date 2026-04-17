@@ -3,6 +3,7 @@ import pool from '../config/database.js';
 
 const router = express.Router();
 
+// ==================== GET ENDPOINTS ====================
 
 // Get all zones with spots
 router.get('/zones', async (req, res) => {
@@ -26,7 +27,6 @@ router.get('/zones', async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to fetch zones' });
   }
 });
-
 
 // Get all parking spots
 router.get('/spots', async (req, res) => {
@@ -66,7 +66,6 @@ router.get('/spots', async (req, res) => {
   }
 });
 
-
 // Get single spot details
 router.get('/spots/:id', async (req, res) => {
   try {
@@ -93,6 +92,182 @@ router.get('/spots/:id', async (req, res) => {
   }
 });
 
+// Get user's reservations
+router.get('/reservations/my', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT r.*, ps.spot_number, z.name as zone_name, v.license_plate
+      FROM reservations r
+      JOIN parking_spots ps ON r.spot_id = ps.id
+      JOIN zones z ON ps.zone_id = z.id
+      LEFT JOIN vehicles v ON r.vehicle_id = v.id
+      WHERE r.user_id = $1 AND r.status = 'active'
+      ORDER BY r.start_time ASC
+    `, [req.user.id]);
+
+    res.json({ success: true, data: { reservations: result.rows } });
+
+  } catch (error) {
+    console.error('Get reservations error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch reservations' });
+  }
+});
+
+// ==================== BOOKING ENDPOINTS (ADD THESE) ====================
+
+// Book a parking spot (CHECK-IN)
+router.post('/book', async (req, res) => {
+  try {
+    const { spotId, licensePlate, durationHours } = req.body;
+    const userId = req.user.id;
+
+    // Check if spot exists and is available
+    const spotCheck = await pool.query(
+      'SELECT * FROM parking_spots WHERE id = $1 AND is_occupied = false AND is_reserved = false',
+      [spotId]
+    );
+
+    if (spotCheck.rows.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Spot not available' 
+      });
+    }
+
+    const spot = spotCheck.rows[0];
+
+    // Calculate times
+    const entryTime = new Date();
+    const endTime = new Date(entryTime.getTime() + durationHours * 60 * 60 * 1000);
+
+    // Create parking session
+    const session = await pool.query(
+      `INSERT INTO parking_sessions (spot_id, user_id, entry_time, end_time, duration_hours, license_plate, status, payment_status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING *`,
+      [spotId, userId, entryTime, endTime, durationHours, licensePlate, 'active', 'pending']
+    );
+
+    // Mark spot as occupied
+    await pool.query(
+      'UPDATE parking_spots SET is_occupied = true WHERE id = $1',
+      [spotId]
+    );
+
+    res.json({ 
+      success: true, 
+      data: session.rows[0],
+      message: 'Spot booked successfully'
+    });
+
+  } catch (error) {
+    console.error('Booking error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Check out from a spot
+router.post('/checkout', async (req, res) => {
+  try {
+    const { sessionId } = req.body;
+    const userId = req.user.id;
+    
+    const session = await pool.query(
+      'SELECT * FROM parking_sessions WHERE id = $1 AND user_id = $2 AND status = $3',
+      [sessionId, userId, 'active']
+    );
+    
+    if (session.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Active session not found' });
+    }
+    
+    const exitTime = new Date();
+    const durationMs = exitTime - session.rows[0].entry_time;
+    const durationHours = Math.max(1, Math.ceil(durationMs / (60 * 60 * 1000)));
+    
+    // Get spot rate
+    const spot = await pool.query(
+      'SELECT hourly_rate FROM parking_spots WHERE id = $1',
+      [session.rows[0].spot_id]
+    );
+    
+    const totalAmount = durationHours * spot.rows[0].hourly_rate;
+    
+    await pool.query(
+      `UPDATE parking_sessions 
+       SET exit_time = $1, duration_minutes = $2, total_amount = $3, status = 'completed', payment_status = 'paid'
+       WHERE id = $4`,
+      [exitTime, durationHours * 60, totalAmount, sessionId]
+    );
+    
+    // Free up the spot
+    await pool.query(
+      'UPDATE parking_spots SET is_occupied = false WHERE id = $1',
+      [session.rows[0].spot_id]
+    );
+    
+    res.json({ success: true, message: 'Checked out successfully', data: { totalAmount } });
+  } catch (error) {
+    console.error('Checkout error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Extend a booking
+router.post('/extend', async (req, res) => {
+  try {
+    const { spotId, extraHours } = req.body;
+    const userId = req.user.id;
+    
+    const session = await pool.query(
+      `SELECT * FROM parking_sessions 
+       WHERE spot_id = $1 AND user_id = $2 AND status = 'active'`,
+      [spotId, userId]
+    );
+    
+    if (session.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'No active session found' });
+    }
+    
+    const newEndTime = new Date(session.rows[0].end_time);
+    newEndTime.setHours(newEndTime.getHours() + extraHours);
+    
+    await pool.query(
+      `UPDATE parking_sessions 
+       SET end_time = $1, duration_hours = duration_hours + $2
+       WHERE id = $3`,
+      [newEndTime, extraHours, session.rows[0].id]
+    );
+    
+    res.json({ success: true, message: `Extended by ${extraHours} hours` });
+  } catch (error) {
+    console.error('Extend error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Get user's active sessions
+router.get('/sessions/my', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT ps.*, pz.name as zone_name, pz.id as zone_id,
+             v.license_plate
+      FROM parking_sessions ps
+      JOIN parking_spots psp ON ps.spot_id = psp.id
+      JOIN zones pz ON psp.zone_id = pz.id
+      LEFT JOIN vehicles v ON ps.vehicle_id = v.id
+      WHERE ps.user_id = $1 AND ps.status = 'active'
+      ORDER BY ps.entry_time DESC
+    `, [req.user.id]);
+
+    res.json({ success: true, data: { sessions: result.rows } });
+  } catch (error) {
+    console.error('Get my sessions error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch sessions' });
+  }
+});
+
+// ==================== RESERVATION ENDPOINTS ====================
 
 // Reserve a spot
 router.post('/spots/:id/reserve', async (req, res) => {
@@ -143,7 +318,6 @@ router.post('/spots/:id/reserve', async (req, res) => {
   }
 });
 
-
 // Cancel reservation
 router.delete('/reservations/:id', async (req, res) => {
   try {
@@ -173,28 +347,6 @@ router.delete('/reservations/:id', async (req, res) => {
   } catch (error) {
     console.error('Cancel reservation error:', error);
     res.status(500).json({ success: false, message: 'Failed to cancel reservation' });
-  }
-});
-
-
-// Get user's reservations
-router.get('/reservations/my', async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT r.*, ps.spot_number, z.name as zone_name, v.license_plate
-      FROM reservations r
-      JOIN parking_spots ps ON r.spot_id = ps.id
-      JOIN zones z ON ps.zone_id = z.id
-      LEFT JOIN vehicles v ON r.vehicle_id = v.id
-      WHERE r.user_id = $1 AND r.status = 'active'
-      ORDER BY r.start_time ASC
-    `, [req.user.id]);
-
-    res.json({ success: true, data: { reservations: result.rows } });
-
-  } catch (error) {
-    console.error('Get reservations error:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch reservations' });
   }
 });
 

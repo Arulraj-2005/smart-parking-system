@@ -1,6 +1,23 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { mockApi } from '../mockApi';
 import { Toast, ExtendModal, SpotModal, BookingTimerRow, CountdownBadge, getSpotColor } from '../components/shared';
+
+const API_URL = import.meta.env.VITE_API_URL || 'https://smart-parking-api-zbno.onrender.com/api';
+
+// Helper function for API calls
+const apiRequest = async (endpoint, options = {}) => {
+  const token = localStorage.getItem('token');
+  const response = await fetch(`${API_URL}${endpoint}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...options.headers,
+    },
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || 'Request failed');
+  return data;
+};
 
 export default function StaffPage({ user, onLogout }) {
   const [activeTab, setActiveTab] = useState('parking');
@@ -20,12 +37,19 @@ export default function StaffPage({ user, onLogout }) {
 
   const fetchData = useCallback(async () => {
     try {
-      const [sp, zo, se] = await Promise.all([mockApi.getSpotList(), mockApi.getZones(), mockApi.getActiveSessions()]);
-      setSpots(sp.data.spots);
-      setZones(zo.data.zones);
-      setSessions(se.data.sessions);
-    } catch { showNotif('error', 'Refresh failed'); }
-    finally { setLoading(false); }
+      const [spotsData, zonesData, sessionsData] = await Promise.all([
+        apiRequest('/parking/spots'),
+        apiRequest('/parking/zones'),
+        apiRequest('/parking/sessions/active'),
+      ]);
+      setSpots(spotsData.data?.spots || []);
+      setZones(zonesData.data?.zones || []);
+      setSessions(sessionsData.data?.sessions || []);
+    } catch (err) {
+      showNotif('error', 'Refresh failed');
+    } finally {
+      setLoading(false);
+    }
   }, [showNotif]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
@@ -37,33 +61,52 @@ export default function StaffPage({ user, onLogout }) {
   const handleEntry = async (licensePlate, durationHours) => {
     if (!selectedSpot) return;
     try {
-      await mockApi.checkIn(licensePlate, selectedSpot.id, durationHours, user.id);
-      await fetchData(); setSelectedSpot(null);
+      await apiRequest('/parking/book', {
+        method: 'POST',
+        body: JSON.stringify({ spotId: selectedSpot.id, licensePlate, durationHours })
+      });
+      await fetchData();
+      setSelectedSpot(null);
       showNotif('success', `✅ Spot ${selectedSpot.spot_number} booked for ${durationHours}h`);
-    } catch (err) { showNotif('error', err.message); }
+    } catch (err) {
+      showNotif('error', err.message);
+    }
   };
 
   const handleExit = async () => {
     if (!selectedSpot) return;
     const session = sessions.find(s => s.spot_number === selectedSpot.spot_number && s.duration_minutes === 0);
-    if (!session) { showNotif('error', 'No active session'); return; }
+    if (!session) {
+      showNotif('error', 'No active session');
+      return;
+    }
     try {
-      const r = await mockApi.checkOut(session.license_plate);
-      await fetchData(); setSelectedSpot(null);
-      showNotif('success', `✅ Checked out! $${r.data.total_amount}`);
-    } catch (err) { showNotif('error', err.message); }
+      await apiRequest('/parking/checkout', {
+        method: 'POST',
+        body: JSON.stringify({ sessionId: session.id })
+      });
+      await fetchData();
+      setSelectedSpot(null);
+      showNotif('success', `✅ Checked out successfully!`);
+    } catch (err) {
+      showNotif('error', err.message);
+    }
   };
 
   const handleExtend = async (extraHours) => {
     const target = extendSpot || selectedSpot;
     if (!target) return;
     try {
-      await mockApi.extendBooking(target.id, extraHours);
+      await apiRequest('/parking/extend', {
+        method: 'POST',
+        body: JSON.stringify({ spotId: target.id, extraHours })
+      });
       await fetchData();
-      const updated = mockApi.getSpots().find(s => s.id === target.id);
-      if (updated) { if (extendSpot) setExtendSpot(updated); if (selectedSpot) setSelectedSpot(updated); }
       showNotif('success', `⏱ Extended by ${extraHours}h!`);
-    } catch (err) { showNotif('error', err.message); }
+      setExtendSpot(null);
+    } catch (err) {
+      showNotif('error', err.message);
+    }
   };
 
   const activeSessions = sessions.filter(s => s.duration_minutes === 0);
@@ -96,9 +139,9 @@ export default function StaffPage({ user, onLogout }) {
             {criticalCount > 0 && <span className="text-xs bg-red-500 text-white px-3 py-1.5 rounded-full font-bold animate-pulse">🔴 {criticalCount} CRITICAL</span>}
             {warningCount > criticalCount && <span className="text-xs bg-white/20 text-white px-3 py-1.5 rounded-full font-medium">⚠ {warningCount} expiring</span>}
             <div className="hidden sm:flex items-center gap-2 bg-white/10 rounded-xl px-3 py-1.5">
-              <div className="h-8 w-8 rounded-full bg-amber-300 text-amber-900 flex items-center justify-center text-sm font-bold">{user.full_name[0]}</div>
+              <div className="h-8 w-8 rounded-full bg-amber-300 text-amber-900 flex items-center justify-center text-sm font-bold">{user.full_name?.[0] || user.name?.[0]}</div>
               <div>
-                <p className="text-sm font-semibold">{user.full_name}</p>
+                <p className="text-sm font-semibold">{user.full_name || user.name}</p>
                 <p className="text-xs text-white/60">Staff</p>
               </div>
             </div>

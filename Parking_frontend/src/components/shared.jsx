@@ -1,5 +1,23 @@
 import { useEffect, useState } from 'react';
 
+const API_URL = import.meta.env.VITE_API_URL || 'https://smart-parking-api-zbno.onrender.com/api';
+
+// Helper for API calls
+const apiRequest = async (endpoint, options = {}) => {
+  const token = localStorage.getItem('token');
+  const response = await fetch(`${API_URL}${endpoint}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...options.headers,
+    },
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || 'Request failed');
+  return data;
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 export function fmtTime(iso) {
   return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -59,11 +77,12 @@ export function getSpotColor(spot) {
 // ─── Notification Toast ────────────────────────────────────────────────────────
 export function Toast({ notif }) {
   if (!notif) return null;
+  const icon = notif.type === 'success' ? '✓' : notif.type === 'warn' ? '!' : '✗';
   return (
     <div className={`fixed top-5 right-5 z-[100] px-6 py-3.5 rounded-2xl shadow-2xl text-white font-medium flex items-center gap-3 max-w-sm animate-bounce-in ${
       notif.type === 'success' ? 'bg-green-500' : notif.type === 'warn' ? 'bg-amber-500' : 'bg-red-500'
     }`}>
-      <span className="text-xl">{notif.type === 'success' ? '✅' : notif.type === 'warn' ? '⚠️' : '❌'}</span>
+      <span className="text-xl">{icon}</span>
       {notif.message}
     </div>
   );
@@ -81,7 +100,7 @@ export function ExtendModal({ spot, onClose, onExtend }) {
   const totalExtended = (booking.totalExtendedHours || 0) + extra;
   const extensions = booking.extensions || [];
   const urgencyBg = expired ? 'from-red-700 to-red-900' : critical ? 'from-red-500 to-orange-600' : warning ? 'from-amber-500 to-orange-500' : 'from-blue-600 to-indigo-700';
-  const urgencyLabel = expired ? '🚨 BOOKING EXPIRED' : critical ? '🔴 CRITICAL — Under 5 min!' : warning ? '⚠️ Expiring Soon' : '🕐 Time Remaining';
+  const urgencyLabel = expired ? 'BOOKING EXPIRED' : critical ? 'CRITICAL - Under 5 min!' : warning ? 'Expiring Soon' : 'Time Remaining';
   const totalDuration = (booking.durationHours) * 3600 * 1000;
   const used = totalDuration - (new Date(booking.endTime).getTime() - Date.now());
   const usedPct = Math.min(100, Math.max(0, (used / totalDuration) * 100));
@@ -178,7 +197,7 @@ export function ExtendModal({ spot, onClose, onExtend }) {
           {extensions.length > 0 && (
             <div className="border border-slate-200 rounded-xl overflow-hidden">
               <button onClick={() => setShowHistory(h => !h)} className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 text-sm font-semibold text-slate-700">
-                <span>📜 Extension History ({extensions.length})</span>
+                <span>Extension History ({extensions.length})</span>
                 <svg className={`w-4 h-4 text-slate-400 transition-transform ${showHistory ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M19 9l-7 7-7-7" /></svg>
               </button>
               {showHistory && (
@@ -199,7 +218,7 @@ export function ExtendModal({ spot, onClose, onExtend }) {
             <button onClick={onClose} className="flex-1 py-3 border-2 border-slate-200 text-slate-700 rounded-xl font-semibold hover:bg-slate-50 transition-colors">Cancel</button>
             <button onClick={doExtend} disabled={busy}
               className="flex-[2] py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-bold shadow-md disabled:opacity-50 flex items-center justify-center gap-2 transition-all">
-              {busy ? (<><svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" /></svg>Extending…</>) : (<>⏱ Extend by {extra}h · ${additionalCost}</>)}
+              {busy ? (<><svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" /></svg>Extending...</>) : (<>Extend by {extra}h · ${additionalCost}</>)}
             </button>
           </div>
         </div>
@@ -242,13 +261,13 @@ export function SpotModal({ spot, sessions, onClose, onEntry, onExit, onOpenExte
             <>
               <div className={`rounded-xl p-4 text-center border-2 ${expired ? 'bg-red-50 border-red-300' : critical ? 'bg-red-50 border-red-200' : warning ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
                 <p className="text-xs font-bold uppercase text-slate-500 mb-1">Time Remaining</p>
-                {expired ? <p className="text-2xl font-bold text-red-700">⏰ EXPIRED</p> : (
+                {expired ? <p className="text-2xl font-bold text-red-700">EXPIRED</p> : (
                   <p className={`text-3xl font-mono font-bold ${critical ? 'text-red-600 animate-pulse' : warning ? 'text-amber-600' : 'text-slate-800'}`}>
                     {String(hours).padStart(2, '0')}:{String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
                   </p>
                 )}
-                {critical && !expired && <p className="text-xs text-red-600 font-bold mt-1 animate-pulse">🔴 Under 5 minutes!</p>}
-                {warning && !critical && <p className="text-xs text-amber-600 mt-1">⚠ Less than 15 minutes</p>}
+                {critical && !expired && <p className="text-xs text-red-600 font-bold mt-1 animate-pulse">Under 5 minutes!</p>}
+                {warning && !critical && <p className="text-xs text-amber-600 mt-1">Less than 15 minutes</p>}
                 <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-500">
                   <div><span className="font-medium">Vehicle:</span> {booking.licensePlate}</div>
                   <div><span className="font-medium">Booked:</span> {booking.durationHours}h</div>
@@ -260,11 +279,11 @@ export function SpotModal({ spot, sessions, onClose, onEntry, onExit, onOpenExte
               <div className="flex rounded-xl overflow-hidden border-2 border-slate-200">
                 {!userView && (
                   <button onClick={() => setTab('checkout')} className={`flex-1 py-2.5 text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${tab === 'checkout' ? 'bg-red-500 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>
-                    🚪 Check Out
+                    Check Out
                   </button>
                 )}
                 <button onClick={() => { setTab('extend'); onOpenExtend(); }} className={`flex-1 py-2.5 text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${tab === 'extend' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>
-                  ⏱ Extend Time
+                  Extend Time
                 </button>
               </div>
 
@@ -276,7 +295,7 @@ export function SpotModal({ spot, sessions, onClose, onEntry, onExit, onOpenExte
                     <div className="flex justify-between border-t border-slate-200 pt-1"><span className="font-semibold">Amount Due</span><span className="font-bold text-green-700 text-base">${actualCost}</span></div>
                   </div>
                   <button onClick={doExit} disabled={busy} className="w-full py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-                    {busy ? 'Processing…' : '✓ Confirm Check-Out'}
+                    {busy ? 'Processing...' : 'Confirm Check-Out'}
                   </button>
                 </div>
               )}
@@ -310,7 +329,7 @@ export function SpotModal({ spot, sessions, onClose, onEntry, onExit, onOpenExte
               </div>
               <button onClick={doEntry} disabled={!plate || busy}
                 className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-bold shadow-md transition-all disabled:opacity-50 flex items-center justify-center gap-2">
-                {busy ? 'Booking…' : `🅿 Book for ${duration}h · $${estimatedCost}`}
+                {busy ? 'Booking...' : `Book for ${duration}h · $${estimatedCost}`}
               </button>
             </div>
           )}
@@ -348,7 +367,7 @@ export function BookingTimerRow({ session, spots, onExtend, showExtend = true })
         <td className="py-3 px-4">
           <button onClick={() => spot && onExtend(spot)} disabled={!spot || !spot.booking}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-40 shadow-sm">
-            ⏱ Extend
+            Extend
           </button>
         </td>
       )}

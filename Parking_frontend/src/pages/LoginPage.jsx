@@ -1,5 +1,19 @@
 import { useState } from 'react';
-import { mockApi } from '../mockApi';
+
+const API_URL = import.meta.env.VITE_API_URL || 'https://smart-parking-api-zbno.onrender.com/api';
+
+const apiRequest = async (endpoint, options = {}) => {
+  const response = await fetch(`${API_URL}${endpoint}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || 'Request failed');
+  return data;
+};
 
 export default function LoginPage({ onLogin }) {
   const [isLogin, setIsLogin] = useState(true);
@@ -21,9 +35,28 @@ export default function LoginPage({ onLogin }) {
     try {
       if (!isLogin && form.password !== form.confirm) throw new Error("Passwords don't match");
       
-      const response = isLogin 
-        ? await mockApi.login(form.username, form.password)
-        : await mockApi.register(form);
+      let response;
+      if (isLogin) {
+        // Login - try username or email
+        const loginData = {
+          email: form.username.includes('@') ? form.username : `${form.username}@placeholder.com`,
+          password: form.password
+        };
+        response = await apiRequest('/auth/login', {
+          method: 'POST',
+          body: JSON.stringify(loginData)
+        });
+      } else {
+        // Register
+        response = await apiRequest('/auth/register', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: form.full_name,
+            email: form.email,
+            password: form.password
+          })
+        });
+      }
 
       const { token, user } = response.data;
       localStorage.setItem('token', token);
@@ -153,7 +186,7 @@ export default function LoginPage({ onLogin }) {
                   <input 
                     type="password" required
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
-                    placeholder="••••••••"
+                    placeholder="........"
                     onChange={e => updateForm('password', e.target.value)}
                   />
                 </div>
@@ -163,7 +196,7 @@ export default function LoginPage({ onLogin }) {
                     <input 
                       type="password" required
                       className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
-                      placeholder="••••••••"
+                      placeholder="........"
                       onChange={e => updateForm('confirm', e.target.value)}
                     />
                   </div>
@@ -172,10 +205,10 @@ export default function LoginPage({ onLogin }) {
 
               {/* Status Messages */}
               {error && <div className="p-3 rounded-lg bg-red-50 border border-red-100 text-red-600 text-sm flex items-center gap-2">
-                <span>⚠️</span> {error}
+                <span>!</span> {error}
               </div>}
               {success && <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-600 text-sm flex items-center gap-2">
-                <span>✅</span> {success}
+                <span>✓</span> {success}
               </div>}
 
               <button 

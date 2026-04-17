@@ -1,6 +1,23 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { mockApi } from '../mockApi';
 import { Toast, ExtendModal, SpotModal, BookingTimerRow, CountdownBadge, getSpotColor, fmtDateTime } from '../components/shared';
+
+const API_URL = import.meta.env.VITE_API_URL || 'https://smart-parking-api-zbno.onrender.com/api';
+
+// Helper function for API calls
+const apiRequest = async (endpoint, options = {}) => {
+  const token = localStorage.getItem('token');
+  const response = await fetch(`${API_URL}${endpoint}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...options.headers,
+    },
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || 'Request failed');
+  return data;
+};
 
 // ─── Completed Session Row ─────────────────────────────────────────────────────
 function CompletedRow({ session }) {
@@ -78,18 +95,25 @@ export default function AdminPage({ user, onLogout }) {
 
   const fetchData = useCallback(async () => {
     try {
-      const [sp, zo, st, se, all] = await Promise.all([
-        mockApi.getSpotList(), mockApi.getZones(), mockApi.getDashboard(),
-        mockApi.getActiveSessions(), mockApi.getAllSessions(),
+      const [spotsData, zonesData, statsData, sessionsData, allSessionsData, usersData] = await Promise.all([
+        apiRequest('/parking/spots'),
+        apiRequest('/parking/zones'),
+        apiRequest('/admin/stats'),
+        apiRequest('/parking/sessions/active'),
+        apiRequest('/parking/sessions/all'),
+        apiRequest('/admin/users'),
       ]);
-      setSpots(sp.data.spots);
-      setZones(zo.data.zones);
-      setStats(st.data.stats);
-      setSessions(se.data.sessions);
-      setAllSessions(all.data.sessions);
-      setUsers(mockApi.getUsers());
-    } catch { showNotif('error', 'Failed to refresh data'); }
-    finally { setLoading(false); }
+      setSpots(spotsData.data?.spots || []);
+      setZones(zonesData.data?.zones || []);
+      setStats(statsData.data?.stats || null);
+      setSessions(sessionsData.data?.sessions || []);
+      setAllSessions(allSessionsData.data?.sessions || []);
+      setUsers(usersData.data?.users || []);
+    } catch (err) {
+      showNotif('error', 'Failed to refresh data');
+    } finally {
+      setLoading(false);
+    }
   }, [showNotif]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
@@ -101,46 +125,76 @@ export default function AdminPage({ user, onLogout }) {
   const handleEntry = async (licensePlate, durationHours) => {
     if (!selectedSpot) return;
     try {
-      await mockApi.checkIn(licensePlate, selectedSpot.id, durationHours, user.id);
-      await fetchData(); setSelectedSpot(null);
-      showNotif('success', `✅ Spot ${selectedSpot.spot_number} booked for ${durationHours}h`);
-    } catch (err) { showNotif('error', err.message); }
+      await apiRequest('/parking/book', {
+        method: 'POST',
+        body: JSON.stringify({ spotId: selectedSpot.id, licensePlate, durationHours })
+      });
+      await fetchData();
+      setSelectedSpot(null);
+      showNotif('success', `Spot ${selectedSpot.spot_number} booked for ${durationHours}h`);
+    } catch (err) {
+      showNotif('error', err.message);
+    }
   };
 
   const handleExit = async () => {
     if (!selectedSpot) return;
     const session = sessions.find(s => s.spot_number === selectedSpot.spot_number && s.duration_minutes === 0);
-    if (!session) { showNotif('error', 'No active session'); return; }
+    if (!session) {
+      showNotif('error', 'No active session');
+      return;
+    }
     try {
-      const r = await mockApi.checkOut(session.license_plate);
-      await fetchData(); setSelectedSpot(null);
-      showNotif('success', `✅ Checked out! Total: $${r.data.total_amount}`);
-    } catch (err) { showNotif('error', err.message); }
+      await apiRequest('/parking/checkout', {
+        method: 'POST',
+        body: JSON.stringify({ sessionId: session.id })
+      });
+      await fetchData();
+      setSelectedSpot(null);
+      showNotif('success', 'Checked out successfully');
+    } catch (err) {
+      showNotif('error', err.message);
+    }
   };
 
   const handleExtend = async (extraHours) => {
     const target = extendSpot || selectedSpot;
     if (!target) return;
     try {
-      await mockApi.extendBooking(target.id, extraHours);
+      await apiRequest('/parking/extend', {
+        method: 'POST',
+        body: JSON.stringify({ spotId: target.id, extraHours })
+      });
       await fetchData();
-      const updated = mockApi.getSpots().find(s => s.id === target.id);
-      if (updated) { if (extendSpot) setExtendSpot(updated); if (selectedSpot) setSelectedSpot(updated); }
-      showNotif('success', `⏱ Extended by ${extraHours}h!`);
-    } catch (err) { showNotif('error', err.message); }
+      showNotif('success', `Extended by ${extraHours}h`);
+      setExtendSpot(null);
+    } catch (err) {
+      showNotif('error', err.message);
+    }
   };
 
   const handleRoleChange = async (id, role) => {
-    await mockApi.updateUserRole(id, role);
-    setUsers(mockApi.getUsers());
-    showNotif('success', 'Role updated');
+    try {
+      await apiRequest('/admin/users/role', {
+        method: 'PUT',
+        body: JSON.stringify({ userId: id, role })
+      });
+      await fetchData();
+      showNotif('success', 'Role updated');
+    } catch (err) {
+      showNotif('error', err.message);
+    }
   };
 
   const handleDeleteUser = async (id) => {
     if (!confirm('Delete this user?')) return;
-    await mockApi.deleteUser(id);
-    setUsers(mockApi.getUsers());
-    showNotif('warn', 'User removed');
+    try {
+      await apiRequest(`/admin/users/${id}`, { method: 'DELETE' });
+      await fetchData();
+      showNotif('warn', 'User removed');
+    } catch (err) {
+      showNotif('error', err.message);
+    }
   };
 
   const activeSessions = sessions.filter(s => s.duration_minutes === 0);
@@ -159,7 +213,7 @@ export default function AdminPage({ user, onLogout }) {
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-100">
-      <div className="text-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div><p className="mt-4 text-slate-600">Loading admin panel…</p></div>
+      <div className="text-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div><p className="mt-4 text-slate-600">Loading admin panel...</p></div>
     </div>
   );
 
@@ -181,12 +235,12 @@ export default function AdminPage({ user, onLogout }) {
           </div>
 
           <div className="flex items-center gap-3">
-            {criticalCount > 0 && <span className="hidden sm:flex text-xs bg-red-500 text-white px-3 py-1.5 rounded-full font-bold animate-pulse">🔴 {criticalCount} CRITICAL</span>}
-            {warningCount > criticalCount && <span className="hidden sm:flex text-xs bg-amber-400 text-amber-900 px-3 py-1.5 rounded-full font-medium">⚠ {warningCount} expiring</span>}
+            {criticalCount > 0 && <span className="hidden sm:flex text-xs bg-red-500 text-white px-3 py-1.5 rounded-full font-bold animate-pulse">CRITICAL {criticalCount}</span>}
+            {warningCount > criticalCount && <span className="hidden sm:flex text-xs bg-amber-400 text-amber-900 px-3 py-1.5 rounded-full font-medium">Expiring {warningCount}</span>}
             <div className="hidden md:flex items-center gap-2 bg-white/10 rounded-xl px-3 py-1.5">
-              <div className="h-8 w-8 rounded-full bg-red-500 flex items-center justify-center text-sm font-bold">{user.full_name[0]}</div>
+              <div className="h-8 w-8 rounded-full bg-red-500 flex items-center justify-center text-sm font-bold">{user.full_name?.[0] || user.name?.[0]}</div>
               <div>
-                <p className="text-sm font-semibold">{user.full_name}</p>
+                <p className="text-sm font-semibold">{user.full_name || user.name}</p>
                 <p className="text-xs text-white/60 capitalize">{user.role}</p>
               </div>
             </div>
@@ -209,7 +263,7 @@ export default function AdminPage({ user, onLogout }) {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
 
-        {/* ── Dashboard Tab ── */}
+        {/* Dashboard Tab */}
         {activeTab === 'dashboard' && stats && (
           <div className="space-y-6">
             <div>
@@ -220,10 +274,10 @@ export default function AdminPage({ user, onLogout }) {
             {/* Stats cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {[
-                { title: 'Total Spots', value: stats.totalSpots, sub: 'Across 4 zones', icon: '🅿️', from: 'from-blue-500', to: 'to-indigo-600' },
-                { title: 'Available', value: stats.availableSpots, sub: 'Ready to book', icon: '✅', from: 'from-green-500', to: 'to-emerald-600' },
-                { title: 'Occupied', value: stats.occupiedSpots, sub: `${stats.occupancyRate}% occupancy`, icon: '🚗', from: 'from-red-500', to: 'to-rose-600' },
-                { title: "Today's Revenue", value: `$${stats.todayRevenue.toFixed(2)}`, sub: `${stats.todayVehicles} sessions`, icon: '💰', from: 'from-amber-500', to: 'to-orange-600' },
+                { title: 'Total Spots', value: stats.totalSpots, sub: 'Across 4 zones', icon: 'P', from: 'from-blue-500', to: 'to-indigo-600' },
+                { title: 'Available', value: stats.availableSpots, sub: 'Ready to book', icon: 'A', from: 'from-green-500', to: 'to-emerald-600' },
+                { title: 'Occupied', value: stats.occupiedSpots, sub: `${stats.occupancyRate}% occupancy`, icon: 'O', from: 'from-red-500', to: 'to-rose-600' },
+                { title: "Today's Revenue", value: `$${stats.todayRevenue.toFixed(2)}`, sub: `${stats.todayVehicles} sessions`, icon: '$', from: 'from-amber-500', to: 'to-orange-600' },
               ].map(c => (
                 <div key={c.title} className={`bg-gradient-to-br ${c.from} ${c.to} rounded-2xl p-5 text-white shadow-lg`}>
                   <div className="flex items-start justify-between">
@@ -243,7 +297,7 @@ export default function AdminPage({ user, onLogout }) {
               <div className="space-y-3">
                 {criticalCount > 0 && (
                   <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-4 flex items-center gap-3">
-                    <span className="text-2xl animate-pulse">🚨</span>
+                    <span className="text-2xl animate-pulse">!</span>
                     <div className="flex-1"><p className="font-bold text-red-800">{criticalCount} booking{criticalCount > 1 ? 's' : ''} expiring in under 5 minutes!</p><p className="text-sm text-red-600">Extend immediately to prevent auto-release.</p></div>
                     <button onClick={() => setActiveTab('bookings')} className="px-4 py-2 bg-red-600 text-white text-sm font-bold rounded-xl hover:bg-red-700 whitespace-nowrap">View & Extend →</button>
                   </div>
@@ -305,13 +359,13 @@ export default function AdminPage({ user, onLogout }) {
           </div>
         )}
 
-        {/* ── Parking Map Tab ── */}
+        {/* Parking Map Tab */}
         {activeTab === 'parking' && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <div><h2 className="text-2xl font-bold text-slate-900">Parking Map</h2><p className="text-slate-500 text-sm">Click any spot to book, check out, or extend</p></div>
               <button onClick={fetchData} className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 flex items-center gap-2 shadow-sm">
-                🔄 Refresh
+                Refresh
               </button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -352,13 +406,13 @@ export default function AdminPage({ user, onLogout }) {
           </div>
         )}
 
-        {/* ── Bookings Tab ── */}
+        {/* Bookings Tab */}
         {activeTab === 'bookings' && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <div><h2 className="text-2xl font-bold text-slate-900">Active Bookings</h2><p className="text-slate-500 text-sm">{activeSessions.length} vehicles currently parked</p></div>
             </div>
-            {criticalCount > 0 && <div className="bg-red-600 rounded-2xl p-4 flex items-center gap-3 text-white animate-pulse"><span className="text-2xl">🚨</span><p className="font-bold">{criticalCount} booking{criticalCount > 1 ? 's' : ''} CRITICAL — extend now!</p></div>}
+            {criticalCount > 0 && <div className="bg-red-600 rounded-2xl p-4 flex items-center gap-3 text-white animate-pulse"><span className="text-2xl">!</span><p className="font-bold">{criticalCount} booking{criticalCount > 1 ? 's' : ''} CRITICAL — extend now!</p></div>}
             {warningCount > criticalCount && <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 flex items-center gap-3"><span className="text-2xl">⚠️</span><p className="font-semibold text-amber-800">{warningCount} expiring within 15 minutes</p></div>}
             {activeSessions.length > 0 ? (
               <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
@@ -384,7 +438,7 @@ export default function AdminPage({ user, onLogout }) {
               </div>
             ) : (
               <div className="bg-white rounded-2xl p-12 text-center shadow-sm border border-slate-100">
-                <div className="text-5xl mb-4">🅿️</div>
+                <div className="text-5xl mb-4">P</div>
                 <p className="text-slate-600 font-medium">No active bookings</p>
                 <button onClick={() => setActiveTab('parking')} className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700">Open Parking Map</button>
               </div>
@@ -392,7 +446,7 @@ export default function AdminPage({ user, onLogout }) {
           </div>
         )}
 
-        {/* ── History Tab ── */}
+        {/* History Tab */}
         {activeTab === 'history' && (
           <div className="space-y-6">
             <div><h2 className="text-2xl font-bold text-slate-900">Session History</h2><p className="text-slate-500 text-sm">{completedSessions.length} completed sessions · Total revenue: ${completedSessions.reduce((s, x) => s + (x.total_amount || 0), 0).toFixed(2)}</p></div>
@@ -421,7 +475,7 @@ export default function AdminPage({ user, onLogout }) {
           </div>
         )}
 
-        {/* ── Users Tab ── */}
+        {/* Users Tab */}
         {activeTab === 'users' && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -461,7 +515,7 @@ export default function AdminPage({ user, onLogout }) {
           </div>
         )}
 
-        {/* ── Analytics Tab ── */}
+        {/* Analytics Tab */}
         {activeTab === 'analytics' && stats && (
           <div className="space-y-6">
             <div><h2 className="text-2xl font-bold text-slate-900">Analytics & Reports</h2></div>
