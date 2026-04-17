@@ -143,24 +143,31 @@ router.post('/checkout', authenticateToken, async (req, res) => {
     
     console.log('Checkout request:', { sessionId, userId });
     
+    // Find session without checking exit_time condition
     const sessionResult = await pool.query(
       `SELECT ps.*, psp.hourly_rate, psp.id as spot_id
        FROM parking_sessions ps
        JOIN parking_spots psp ON ps.spot_id = psp.id
-       WHERE ps.id = $1 AND ps.user_id = $2 AND ps.exit_time IS NULL`,
+       WHERE ps.id = $1 AND ps.user_id = $2`,
       [sessionId, userId]
     );
     
     if (sessionResult.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Active session not found' });
+      return res.status(404).json({ success: false, message: 'Session not found' });
     }
     
     const session = sessionResult.rows[0];
+    
+    // If already checked out
+    if (session.exit_time) {
+      return res.json({ success: true, message: 'Already checked out', data: { totalAmount: session.total_amount } });
+    }
+    
     const exitTime = new Date();
     const durationMs = exitTime - new Date(session.entry_time);
     const durationMinutes = Math.max(30, Math.ceil(durationMs / (60 * 1000)));
     const durationHours = Math.ceil(durationMinutes / 60);
-    const totalAmount = durationHours * session.hourly_rate;
+    const totalAmount = durationHours * parseFloat(session.hourly_rate);
     
     await pool.query(
       `UPDATE parking_sessions 
