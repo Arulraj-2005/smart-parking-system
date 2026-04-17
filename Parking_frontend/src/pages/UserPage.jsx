@@ -81,6 +81,12 @@ function CheckoutModal({ session, spot, onConfirm, onCancel }) {
   const actualHours = Math.max(1, Math.ceil((Date.now() - new Date(session.entry_time).getTime()) / 3600000));
   const cost = actualHours * (spot?.hourly_rate || 5);
 
+  const handleConfirm = async () => {
+    setBusy(true);
+    await onConfirm();
+    setBusy(false);
+  };
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
@@ -100,7 +106,7 @@ function CheckoutModal({ session, spot, onConfirm, onCancel }) {
           </div>
           <div className="flex gap-3">
             <button onClick={onCancel} className="flex-1 py-3 border-2 border-slate-200 text-slate-700 rounded-xl font-semibold">Cancel</button>
-            <button onClick={onConfirm} disabled={busy} className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold">
+            <button onClick={handleConfirm} disabled={busy} className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold">
               {busy ? 'Processing...' : `Pay $${cost} & Exit`}
             </button>
           </div>
@@ -147,13 +153,15 @@ export default function UserPage({ user, onLogout }) {
       
       console.log('All sessions count:', allSessions.length);
       
-      const active = allSessions.filter(s => !s.end_time || new Date(s.end_time) > new Date());
-      const completed = allSessions.filter(s => s.end_time && new Date(s.end_time) <= new Date());
+      // ✅ FIXED: Filter by payment_status instead of end_time
+      const active = allSessions.filter(s => s.payment_status === 'pending');
+      const completed = allSessions.filter(s => s.payment_status === 'paid');
       
       setActiveSessions(active);
       setCompletedSessions(completed);
       
       console.log('Active sessions:', active.length);
+      console.log('Completed sessions:', completed.length);
     } catch (err) {
       console.error('Fetch error:', err);
       showNotif('error', 'Failed to refresh');

@@ -1,8 +1,6 @@
-
 import express from 'express';
 import pool from '../config/database.js';
 import { authenticateToken } from '../middleware/auth.js';
-// ... rest of your code
 
 const router = express.Router();
 
@@ -135,7 +133,6 @@ router.post('/book', authenticateToken, async (req, res) => {
 });
 
 // Check out from a spot (CHECKOUT)
-// Check out from a spot (CHECKOUT)
 router.post('/checkout', authenticateToken, async (req, res) => {
   try {
     const { sessionId } = req.body;
@@ -143,7 +140,6 @@ router.post('/checkout', authenticateToken, async (req, res) => {
     
     console.log('Checkout request:', { sessionId, userId });
     
-    // Find session without checking exit_time condition
     const sessionResult = await pool.query(
       `SELECT ps.*, psp.hourly_rate, psp.id as spot_id
        FROM parking_sessions ps
@@ -158,7 +154,6 @@ router.post('/checkout', authenticateToken, async (req, res) => {
     
     const session = sessionResult.rows[0];
     
-    // If already checked out
     if (session.exit_time) {
       return res.json({ success: true, message: 'Already checked out', data: { totalAmount: session.total_amount } });
     }
@@ -188,8 +183,7 @@ router.post('/checkout', authenticateToken, async (req, res) => {
   }
 });
 
-// Extend a booking
-// Extend a booking
+// Extend a booking (FIXED)
 router.post('/extend', authenticateToken, async (req, res) => {
   try {
     const { spotId, extraHours } = req.body;
@@ -197,10 +191,10 @@ router.post('/extend', authenticateToken, async (req, res) => {
     
     console.log('Extend request:', { spotId, extraHours, userId });
     
-    // Find active session for this spot
+    // ✅ FIXED: Use payment_status instead of exit_time IS NULL
     const sessionResult = await pool.query(
       `SELECT * FROM parking_sessions 
-       WHERE spot_id = $1 AND user_id = $2 AND exit_time IS NULL`,
+       WHERE spot_id = $1 AND user_id = $2 AND payment_status = 'pending'`,
       [spotId, userId]
     );
     
