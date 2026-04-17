@@ -1,19 +1,13 @@
-// FORCE DEPLOY - WORKING VERSION v5
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import adminRoutes from './routes/admin.js';
-
-// Add this line after other route registrations (before error handler)
-app.use('/api/admin', authenticateToken, adminRoutes);
-
 
 dotenv.config();
 
 console.log('🔧 Loading modules...');
 
-// Try to import routes with error handling
-let authRoutes, parkingRoutes, vehicleRoutes, analyticsRoutes, authenticateToken;
+// Import routes
+let authRoutes, parkingRoutes, vehicleRoutes, analyticsRoutes, authenticateToken, adminRoutes;
 
 try {
   const authModule = await import('./routes/auth.js');
@@ -60,6 +54,16 @@ try {
   process.exit(1);
 }
 
+try {
+  const adminModule = await import('./routes/admin.js');
+  adminRoutes = adminModule.default;
+  console.log('✅ Admin routes loaded');
+} catch (err) {
+  console.error('❌ Failed to load admin routes:', err.message);
+  process.exit(1);
+}
+
+// ✅ CREATE APP HERE - AFTER all imports
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -68,11 +72,12 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Routes
+// Routes - THESE MUST COME AFTER app is created
 app.use('/api/auth', authRoutes);
 app.use('/api/parking', authenticateToken, parkingRoutes);
 app.use('/api/vehicles', authenticateToken, vehicleRoutes);
 app.use('/api/analytics', authenticateToken, analyticsRoutes);
+app.use('/api/admin', authenticateToken, adminRoutes);  // ✅ This line must be AFTER const app = express()
 
 // Health check
 app.get('/api/health', (req, res) => {
