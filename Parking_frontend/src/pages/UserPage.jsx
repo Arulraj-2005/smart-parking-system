@@ -130,18 +130,33 @@ export default function UserPage({ user, onLogout }) {
 
   const fetchData = useCallback(async () => {
     try {
+      console.log('Fetching data...');
+      
       const [spotsData, zonesData, sessionsData] = await Promise.all([
         apiRequest('/parking/spots'),
         apiRequest('/parking/zones'),
         apiRequest('/parking/sessions/my'),
       ]);
+      
+      console.log('Sessions API response:', sessionsData);
+      
       setSpots(spotsData.data?.spots || []);
       setZones(zonesData.data?.zones || []);
       
-      const allSessions = sessionsData.data?.sessions || [];
-      setActiveSessions(allSessions.filter(s => !s.end_time || new Date(s.end_time) > new Date()));
-      setCompletedSessions(allSessions.filter(s => s.end_time && new Date(s.end_time) <= new Date()));
+      // Handle both possible response structures
+      const allSessions = sessionsData.sessions || sessionsData.data?.sessions || [];
+      
+      console.log('All sessions count:', allSessions.length);
+      
+      const active = allSessions.filter(s => !s.end_time || new Date(s.end_time) > new Date());
+      const completed = allSessions.filter(s => s.end_time && new Date(s.end_time) <= new Date());
+      
+      setActiveSessions(active);
+      setCompletedSessions(completed);
+      
+      console.log('Active sessions:', active.length);
     } catch (err) {
+      console.error('Fetch error:', err);
       showNotif('error', 'Failed to refresh');
     } finally {
       setLoading(false);
@@ -151,22 +166,32 @@ export default function UserPage({ user, onLogout }) {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   useEffect(() => {
-    refreshRef.current = setInterval(fetchData, 15000);
+    refreshRef.current = setInterval(fetchData, 10000);
     return () => { if (refreshRef.current) clearInterval(refreshRef.current); };
   }, [fetchData]);
 
   const handleBooking = async (licensePlate, durationHours) => {
     if (!selectedSpot) return;
     try {
-      await apiRequest('/parking/book', {
+      console.log('Booking spot:', selectedSpot.id, licensePlate, durationHours);
+      
+      const result = await apiRequest('/parking/book', {
         method: 'POST',
-        body: JSON.stringify({ spotId: selectedSpot.id, licensePlate, durationHours })
+        body: JSON.stringify({ 
+          spotId: selectedSpot.id, 
+          licensePlate, 
+          durationHours 
+        })
       });
+      
+      console.log('Booking result:', result);
+      
       await fetchData();
       setSelectedSpot(null);
       showNotif('success', `Spot ${selectedSpot.spot_number} booked for ${durationHours}h!`);
       setActiveTab('mybookings');
     } catch (err) {
+      console.error('Booking error:', err);
       showNotif('error', err.message);
     }
   };
@@ -174,15 +199,19 @@ export default function UserPage({ user, onLogout }) {
   const handleCheckout = async () => {
     if (!checkoutSession) return;
     try {
+      console.log('Checking out session:', checkoutSession.id);
+      
       await apiRequest('/parking/checkout', {
         method: 'POST',
         body: JSON.stringify({ sessionId: checkoutSession.id })
       });
+      
       await fetchData();
       setCheckoutSession(null);
       showNotif('success', 'Checked out successfully!');
       setActiveTab('history');
     } catch (err) {
+      console.error('Checkout error:', err);
       showNotif('error', err.message);
     }
   };
@@ -190,14 +219,18 @@ export default function UserPage({ user, onLogout }) {
   const handleExtend = async (extraHours) => {
     if (!extendSpot) return;
     try {
+      console.log('Extending spot:', extendSpot.id, extraHours);
+      
       await apiRequest('/parking/extend', {
         method: 'POST',
         body: JSON.stringify({ spotId: extendSpot.id, extraHours })
       });
+      
       await fetchData();
       showNotif('success', `Extended by ${extraHours} hours!`);
       setExtendSpot(null);
     } catch (err) {
+      console.error('Extend error:', err);
       showNotif('error', err.message);
     }
   };
@@ -208,7 +241,10 @@ export default function UserPage({ user, onLogout }) {
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-100">
-      <div className="text-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div><p className="mt-4 text-slate-600">Loading...</p></div>
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+        <p className="mt-4 text-slate-600">Loading...</p>
+      </div>
     </div>
   );
 
@@ -220,14 +256,19 @@ export default function UserPage({ user, onLogout }) {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-md">
-              <svg className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><rect x="2" y="4" width="20" height="16" rx="2" /><path d="M8 4v16M16 4v16M2 12h20" /></svg>
+              <svg className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <rect x="2" y="4" width="20" height="16" rx="2" />
+                <path d="M8 4v16M16 4v16M2 12h20" />
+              </svg>
             </div>
             <div>
               <h1 className="text-lg font-bold text-slate-900">SmartPark</h1>
               <p className="text-xs text-slate-500 -mt-0.5">Customer Portal</p>
             </div>
           </div>
-          <button onClick={onLogout} className="px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-xl transition-colors">Logout</button>
+          <button onClick={onLogout} className="px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-xl transition-colors">
+            Logout
+          </button>
         </div>
 
         <div className="max-w-4xl mx-auto px-4 sm:px-6">
@@ -237,9 +278,17 @@ export default function UserPage({ user, onLogout }) {
               { id: 'mybookings', label: `My Bookings (${activeSessions.length})`, icon: '🅿️' },
               { id: 'history', label: 'History', icon: '📋' },
             ].map(tab => (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === tab.id ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}>
-                <span>{tab.icon}</span><span>{tab.label}</span>
+              <button 
+                key={tab.id} 
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  activeTab === tab.id 
+                    ? 'bg-blue-600 text-white shadow-sm' 
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <span>{tab.icon}</span>
+                <span>{tab.label}</span>
               </button>
             ))}
           </div>
@@ -248,6 +297,7 @@ export default function UserPage({ user, onLogout }) {
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
 
+        {/* Book a Spot Tab */}
         {activeTab === 'map' && (
           <div className="space-y-6">
             <div>
@@ -284,12 +334,18 @@ export default function UserPage({ user, onLogout }) {
                     </div>
                     <div className="grid grid-cols-4 gap-1.5">
                       {zoneSpots.map(spot => (
-                        <button key={spot.id}
+                        <button
+                          key={spot.id}
                           onClick={() => !spot.is_occupied && !spot.is_reserved ? setSelectedSpot(spot) : null}
                           disabled={spot.is_occupied || spot.is_reserved}
-                          className={`aspect-square rounded-lg ${getSpotColor(spot)} transition-all duration-200 flex flex-col items-center justify-center shadow-sm ${!spot.is_occupied ? 'hover:scale-105' : 'cursor-not-allowed opacity-80'} relative`}>
+                          className={`aspect-square rounded-lg ${getSpotColor(spot)} transition-all duration-200 flex flex-col items-center justify-center shadow-sm ${
+                            !spot.is_occupied ? 'hover:scale-105' : 'cursor-not-allowed opacity-80'
+                          } relative`}
+                        >
                           <span className="text-[8px] font-bold text-white leading-tight drop-shadow">{spot.spot_number}</span>
-                          {spot.is_occupied && spot.booking && !spot.booking.expired && <CountdownBadge endTime={spot.booking.endTime} />}
+                          {spot.is_occupied && spot.booking && !spot.booking.expired && (
+                            <CountdownBadge endTime={spot.booking.endTime} />
+                          )}
                         </button>
                       ))}
                     </div>
@@ -300,6 +356,7 @@ export default function UserPage({ user, onLogout }) {
           </div>
         )}
 
+        {/* My Bookings Tab */}
         {activeTab === 'mybookings' && (
           <div className="space-y-6">
             <div>
@@ -325,12 +382,18 @@ export default function UserPage({ user, onLogout }) {
               <div className="bg-white rounded-2xl p-12 text-center shadow-sm border border-slate-100">
                 <div className="text-6xl mb-4">🅿️</div>
                 <h3 className="text-slate-700 font-semibold text-lg mb-2">No Active Bookings</h3>
-                <button onClick={() => setActiveTab('map')} className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold">Find a Spot</button>
+                <button 
+                  onClick={() => setActiveTab('map')} 
+                  className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold"
+                >
+                  Find a Spot
+                </button>
               </div>
             )}
           </div>
         )}
 
+        {/* History Tab */}
         {activeTab === 'history' && (
           <div className="space-y-6">
             <div>
@@ -341,13 +404,17 @@ export default function UserPage({ user, onLogout }) {
               <div className="space-y-3">
                 {completedSessions.map(session => (
                   <div key={session.id} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center gap-4">
-                    <div className="h-12 w-12 rounded-xl bg-green-100 flex items-center justify-center text-green-600 font-bold text-sm">✓</div>
+                    <div className="h-12 w-12 rounded-xl bg-green-100 flex items-center justify-center text-green-600 font-bold text-sm">
+                      ✓
+                    </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-slate-900">Spot {session.spot_number}</span>
                         <span className="text-xs bg-slate-100 text-slate-600 rounded-full px-2 py-0.5">Zone {session.zone_name}</span>
                       </div>
-                      <p className="text-xs text-slate-400">{fmtDateTime(session.entry_time)} · {session.duration_hours}h parked</p>
+                      <p className="text-xs text-slate-400">
+                        {fmtDateTime(session.entry_time)} · {session.duration_hours}h parked
+                      </p>
                     </div>
                     <div className="text-right">
                       <p className="font-bold text-green-700">${session.total_amount?.toFixed(2) || '0'}</p>
@@ -367,13 +434,25 @@ export default function UserPage({ user, onLogout }) {
         )}
       </main>
 
+      {/* Modals */}
       {selectedSpot && !selectedSpot.is_occupied && (
-        <SpotModal spot={selectedSpot} sessions={[]} onClose={() => setSelectedSpot(null)}
-          onEntry={handleBooking} onExit={async () => {}} onOpenExtend={() => {}} userView={true} />
+        <SpotModal 
+          spot={selectedSpot} 
+          sessions={[]} 
+          onClose={() => setSelectedSpot(null)}
+          onEntry={handleBooking} 
+          onExit={async () => {}} 
+          onOpenExtend={() => {}} 
+          userView={true} 
+        />
       )}
 
       {extendSpot && extendSpot.booking && (
-        <ExtendModal spot={extendSpot} onClose={() => setExtendSpot(null)} onExtend={handleExtend} />
+        <ExtendModal 
+          spot={extendSpot} 
+          onClose={() => setExtendSpot(null)} 
+          onExtend={handleExtend} 
+        />
       )}
 
       {checkoutSession && (
