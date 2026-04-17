@@ -309,4 +309,51 @@ router.get('/sessions/my', authenticateToken, async (req, res) => {
   }
 });
 
+
+// Check out from a spot (CHECKOUT)
+router.post('/checkout', authenticateToken, async (req, res) => {
+  try {
+    const { sessionId } = req.body;
+    const userId = req.user.id;
+    
+    console.log('Checkout request:', { sessionId, userId });
+    
+    const sessionResult = await pool.query(
+      `SELECT ps.*, psp.hourly_rate, psp.id as spot_id
+       FROM parking_sessions ps
+       JOIN parking_spots psp ON ps.spot_id = psp.id
+       WHERE ps.id = $1 AND ps.user_id = $2 AND ps.exit_time IS NULL`,
+      [sessionId, userId]
+    );
+    
+    if (sessionResult.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Active session not found' });
+    }
+    
+    const session = sessionResult.rows[0];
+    const exitTime = new Date();
+    const durationMs = exitTime - new Date(session.entry_time);
+    const durationMinutes = Math.max(30, Math.ceil(durationMs / (60 * 1000)));
+    const durationHours = Math.ceil(durationMinutes / 60);
+    const totalAmount = durationHours * session.hourly_rate;
+    
+    await pool.query(
+      `UPDATE parking_sessions 
+       SET exit_time = $1, duration_minutes = $2, total_amount = $3, payment_status = 'paid'
+       WHERE id = $4`,
+      [exitTime, durationMinutes, totalAmount, sessionId]
+    );
+    
+    await pool.query(
+      'UPDATE parking_spots SET is_occupied = false WHERE id = $1',
+      [session.spot_id]
+    );
+    
+    res.json({ success: true, message: 'Checked out successfully', data: { totalAmount } });
+  } catch (error) {
+    console.error('Checkout error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 export default router;
