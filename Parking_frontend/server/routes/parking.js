@@ -85,7 +85,7 @@ router.get('/sessions/my', authenticateToken, async (req, res) => {
       total_amount: s.total_amount,
       payment_status: s.payment_status,
       hourly_rate: s.hourly_rate,
-      is_active: s.end_time === null
+      is_active: s.payment_status === 'pending'
     }));
 
     res.json({ success: true, data: { sessions } });
@@ -132,7 +132,7 @@ router.post('/book', authenticateToken, async (req, res) => {
   }
 });
 
-// Check out from a spot (CHECKOUT)
+// Check out from a spot (CHECKOUT) - FIXED
 router.post('/checkout', authenticateToken, async (req, res) => {
   try {
     const { sessionId } = req.body;
@@ -154,7 +154,8 @@ router.post('/checkout', authenticateToken, async (req, res) => {
     
     const session = sessionResult.rows[0];
     
-    if (session.exit_time) {
+    // ✅ FIXED: Check payment_status instead of exit_time
+    if (session.payment_status === 'paid') {
       return res.json({ success: true, message: 'Already checked out', data: { totalAmount: session.total_amount } });
     }
     
@@ -183,7 +184,7 @@ router.post('/checkout', authenticateToken, async (req, res) => {
   }
 });
 
-// Extend a booking (FIXED)
+// Extend a booking - FIXED
 router.post('/extend', authenticateToken, async (req, res) => {
   try {
     const { spotId, extraHours } = req.body;
@@ -234,7 +235,7 @@ router.get('/sessions/active', authenticateToken, async (req, res) => {
       JOIN parking_spots psp ON ps.spot_id = psp.id
       JOIN zones pz ON psp.zone_id = pz.id
       JOIN users u ON ps.user_id = u.id
-      WHERE ps.exit_time IS NULL
+      WHERE ps.payment_status = 'pending'
       ORDER BY ps.entry_time DESC
     `);
     
