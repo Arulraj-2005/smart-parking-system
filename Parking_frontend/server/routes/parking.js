@@ -143,57 +143,45 @@ router.post('/checkout', authenticateToken, async (req, res) => {
     
     console.log('Checkout request:', { sessionId, userId });
     
-    // Find the active session
+    // Find session without checking exit_time condition
     const sessionResult = await pool.query(
-      `SELECT ps.*, psp.hourly_rate, psp.id as spot_id, psp.spot_number
+      `SELECT ps.*, psp.hourly_rate, psp.id as spot_id
        FROM parking_sessions ps
        JOIN parking_spots psp ON ps.spot_id = psp.id
-       WHERE ps.id = $1 AND ps.user_id = $2 AND ps.exit_time IS NULL`,
+       WHERE ps.id = $1 AND ps.user_id = $2`,
       [sessionId, userId]
     );
     
     if (sessionResult.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Active session not found' });
+      return res.status(404).json({ success: false, message: 'Session not found' });
     }
     
     const session = sessionResult.rows[0];
+    
+    // If already checked out
+    if (session.exit_time) {
+      return res.json({ success: true, message: 'Already checked out', data: { totalAmount: session.total_amount } });
+    }
+    
     const exitTime = new Date();
-    const entryTime = new Date(session.entry_time);
-    const durationMs = exitTime - entryTime;
+    const durationMs = exitTime - new Date(session.entry_time);
     const durationMinutes = Math.max(30, Math.ceil(durationMs / (60 * 1000)));
     const durationHours = Math.ceil(durationMinutes / 60);
     const totalAmount = durationHours * parseFloat(session.hourly_rate);
     
-    // Update session with checkout info
-    const updateResult = await pool.query(
+    await pool.query(
       `UPDATE parking_sessions 
-       SET exit_time = $1, 
-           duration_minutes = $2, 
-           total_amount = $3, 
-           payment_status = 'paid'
-       WHERE id = $4
-       RETURNING *`,
+       SET exit_time = $1, duration_minutes = $2, total_amount = $3, payment_status = 'paid'
+       WHERE id = $4`,
       [exitTime, durationMinutes, totalAmount, sessionId]
     );
     
-    console.log('Session updated:', updateResult.rows[0]);
-    
-    // Free up the spot
     await pool.query(
       'UPDATE parking_spots SET is_occupied = false WHERE id = $1',
       [session.spot_id]
     );
     
-    res.json({ 
-      success: true, 
-      message: 'Checked out successfully', 
-      data: { 
-        totalAmount, 
-        durationHours, 
-        exitTime,
-        session: updateResult.rows[0]
-      } 
-    });
+    res.json({ success: true, message: 'Checked out successfully', data: { totalAmount } });
   } catch (error) {
     console.error('Checkout error:', error);
     res.status(500).json({ success: false, message: error.message });
