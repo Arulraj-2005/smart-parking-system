@@ -2,6 +2,11 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import adminRoutes from './routes/admin.js';
+
+// Add this line after other route registrations (before error handler)
+app.use('/api/admin', authenticateToken, adminRoutes);
+
 
 dotenv.config();
 

@@ -221,4 +221,51 @@ router.post('/extend', authenticateToken, async (req, res) => {
   }
 });
 
+// Get active sessions (all users - for admin)
+router.get('/sessions/active', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        ps.id, ps.spot_id, ps.user_id, ps.entry_time, ps.exit_time,
+        ps.duration_minutes, ps.total_amount, ps.payment_status, ps.license_plate,
+        psp.spot_number, pz.name as zone_name, psp.hourly_rate,
+        u.full_name, u.email
+      FROM parking_sessions ps
+      JOIN parking_spots psp ON ps.spot_id = psp.id
+      JOIN zones pz ON psp.zone_id = pz.id
+      JOIN users u ON ps.user_id = u.id
+      WHERE ps.exit_time IS NULL
+      ORDER BY ps.entry_time DESC
+    `);
+    
+    res.json({ success: true, data: { sessions: result.rows } });
+  } catch (error) {
+    console.error('Get active sessions error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Get all sessions (for admin history)
+router.get('/sessions/all', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        ps.id, ps.spot_id, ps.user_id, ps.entry_time, ps.exit_time,
+        ps.duration_minutes, ps.total_amount, ps.payment_status, ps.license_plate,
+        psp.spot_number, pz.name as zone_name, psp.hourly_rate,
+        u.full_name, u.email
+      FROM parking_sessions ps
+      JOIN parking_spots psp ON ps.spot_id = psp.id
+      JOIN zones pz ON psp.zone_id = pz.id
+      JOIN users u ON ps.user_id = u.id
+      ORDER BY ps.entry_time DESC
+    `);
+    
+    res.json({ success: true, data: { sessions: result.rows } });
+  } catch (error) {
+    console.error('Get all sessions error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 export default router;
