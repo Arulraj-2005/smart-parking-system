@@ -143,7 +143,6 @@ export default function UserPage({ user, onLogout }) {
       setSpots(spotsData.data?.spots || []);
       setZones(zonesData.data?.zones || []);
       
-      // Handle both possible response structures
       const allSessions = sessionsData.sessions || sessionsData.data?.sessions || [];
       
       console.log('All sessions count:', allSessions.length);
@@ -402,26 +401,32 @@ export default function UserPage({ user, onLogout }) {
             </div>
             {completedSessions.length > 0 ? (
               <div className="space-y-3">
-                {completedSessions.map(session => (
-                  <div key={session.id} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center gap-4">
-                    <div className="h-12 w-12 rounded-xl bg-green-100 flex items-center justify-center text-green-600 font-bold text-sm">
-                      ✓
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-slate-900">Spot {session.spot_number}</span>
-                        <span className="text-xs bg-slate-100 text-slate-600 rounded-full px-2 py-0.5">Zone {session.zone_name}</span>
+                {completedSessions.map(session => {
+                  const amount = typeof session.total_amount === 'number' 
+                    ? session.total_amount.toFixed(2) 
+                    : (session.total_amount || '0');
+                  
+                  return (
+                    <div key={session.id} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center gap-4">
+                      <div className="h-12 w-12 rounded-xl bg-green-100 flex items-center justify-center text-green-600 font-bold text-sm">
+                        ✓
                       </div>
-                      <p className="text-xs text-slate-400">
-                        {fmtDateTime(session.entry_time)} · {session.duration_hours}h parked
-                      </p>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-900">Spot {session.spot_number}</span>
+                          <span className="text-xs bg-slate-100 text-slate-600 rounded-full px-2 py-0.5">Zone {session.zone_name}</span>
+                        </div>
+                        <p className="text-xs text-slate-400">
+                          {fmtDateTime(session.entry_time)} · {session.duration_hours}h parked
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-green-700">${amount}</p>
+                        <span className="text-xs bg-green-100 text-green-700 rounded-full px-2 py-0.5">Paid</span>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-bold text-green-700">${session.total_amount?.toFixed(2) || '0'}</p>
-                      <span className="text-xs bg-green-100 text-green-700 rounded-full px-2 py-0.5">Paid</span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="bg-white rounded-2xl p-12 text-center shadow-sm border border-slate-100">
@@ -447,7 +452,7 @@ export default function UserPage({ user, onLogout }) {
         />
       )}
 
-      {extendSpot && extendSpot.booking && (
+      {extendSpot && (
         <ExtendModal 
           spot={extendSpot} 
           onClose={() => setExtendSpot(null)} 
