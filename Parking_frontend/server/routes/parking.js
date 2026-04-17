@@ -1,6 +1,9 @@
+
+// FORCE DEPLOY - CHECKOUT FIX v3
 import express from 'express';
 import pool from '../config/database.js';
 import { authenticateToken } from '../middleware/auth.js';
+// ... rest of your code
 
 const router = express.Router();
 
