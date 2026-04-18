@@ -18,56 +18,109 @@ const apiRequest = async (endpoint, options = {}) => {
   return data;
 };
 
-// Active Booking Card Component
+// ─── Active Booking Card ────────────────────────────────────────────────────
 function MyBookingCard({ session, spot, onExtend, onCheckout }) {
   const { hours, minutes, seconds, expired, critical, warning } = useCountdown(session.end_time);
   const totalDuration = session.duration_hours * 3600 * 1000;
   const used = totalDuration - (new Date(session.end_time).getTime() - Date.now());
   const usedPct = Math.min(100, Math.max(0, (used / totalDuration) * 100));
 
-  const cardBg = expired ? 'border-red-300 bg-red-50' : critical ? 'border-red-200 bg-red-50' : warning ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-white';
+  const statusColor = expired
+    ? { bar: '#dc2626', bg: '#fef2f2', border: '#fca5a5', text: '#991b1b' }
+    : critical
+    ? { bar: '#ef4444', bg: '#fef2f2', border: '#fca5a5', text: '#b91c1c' }
+    : warning
+    ? { bar: '#d97706', bg: '#fffbeb', border: '#fcd34d', text: '#92400e' }
+    : { bar: '#1d4ed8', bg: '#f8fafc', border: '#cbd5e1', text: '#1e3a5f' };
 
   return (
-    <div className={`rounded-2xl border-2 p-5 shadow-sm transition-all ${cardBg}`}>
-      <div className="flex items-start justify-between mb-4">
+    <div style={{
+      border: `2px solid ${statusColor.border}`,
+      backgroundColor: statusColor.bg,
+      borderRadius: '6px',
+      padding: '16px',
+      fontFamily: "'DM Mono', 'Courier New', monospace",
+    }}>
+      {/* Header row */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-2xl font-extrabold text-slate-900 font-mono">{session.spot_number}</span>
-            <span className="text-xs bg-blue-100 text-blue-700 rounded-full px-2 py-0.5 font-semibold">Zone {session.zone_name}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', letterSpacing: '-1px' }}>
+              {session.spot_number}
+            </span>
+            <span style={{
+              fontSize: '10px', fontWeight: 700, textTransform: 'uppercase',
+              letterSpacing: '1px', color: '#475569',
+              background: '#e2e8f0', padding: '2px 8px', borderRadius: '2px'
+            }}>
+              ZONE {session.zone_name}
+            </span>
           </div>
-          <p className="text-sm text-slate-500 font-mono">{session.license_plate}</p>
-        </div>
-        <div className="text-right">
-          <p className="text-xs text-slate-500">Rate</p>
-          <p className="font-bold text-slate-900">${spot?.hourly_rate || 5}/hr</p>
-        </div>
-      </div>
-
-      <div className={`rounded-xl p-3 text-center mb-4 ${expired ? 'bg-red-100' : critical ? 'bg-red-100' : warning ? 'bg-amber-100' : 'bg-slate-50'}`}>
-        <p className={`text-xs font-bold uppercase tracking-wider mb-1 ${expired ? 'text-red-700' : critical ? 'text-red-600' : warning ? 'text-amber-600' : 'text-slate-500'}`}>
-          {expired ? 'EXPIRED' : critical ? 'CRITICAL - Under 5 min!' : warning ? 'Expiring Soon' : 'Time Remaining'}
-        </p>
-        {expired ? (
-          <p className="text-2xl font-bold text-red-700">00:00:00</p>
-        ) : (
-          <p className={`text-3xl font-mono font-bold tracking-widest ${critical ? 'text-red-600 animate-pulse' : warning ? 'text-amber-600' : 'text-slate-800'}`}>
-            {String(hours).padStart(2, '0')}:{String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
+          <p style={{ fontSize: '12px', color: '#64748b', marginTop: '2px', letterSpacing: '1px' }}>
+            {session.license_plate}
           </p>
-        )}
-        <div className="mt-2">
-          <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
-            <div className={`h-full rounded-full transition-all duration-1000 ${expired ? 'bg-red-500' : critical ? 'bg-red-400' : warning ? 'bg-amber-400' : 'bg-blue-500'}`} style={{ width: `${usedPct}%` }} />
-          </div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <p style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1px' }}>Rate</p>
+          <p style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>
+            ₹{spot?.hourly_rate || 50}/hr
+          </p>
         </div>
       </div>
 
-      <div className="flex gap-2">
-        <button onClick={onExtend}
-          className="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-sm font-bold shadow-sm transition-all">
-          Extend Time
+      {/* Countdown block */}
+      <div style={{
+        backgroundColor: statusColor.bg,
+        border: `1px solid ${statusColor.border}`,
+        padding: '12px',
+        marginBottom: '14px',
+        textAlign: 'center',
+        borderRadius: '4px',
+      }}>
+        <p style={{
+          fontSize: '10px', fontWeight: 700, textTransform: 'uppercase',
+          letterSpacing: '2px', marginBottom: '6px', color: statusColor.text
+        }}>
+          {expired ? '⚠ SESSION EXPIRED' : critical ? '⚠ UNDER 5 MIN' : warning ? 'EXPIRING SOON' : 'TIME LEFT'}
+        </p>
+        <p style={{
+          fontSize: '32px', fontWeight: 700, letterSpacing: '4px',
+          color: expired || critical ? '#dc2626' : warning ? '#b45309' : '#1e3a5f',
+          animation: critical && !expired ? 'pulse 1s infinite' : 'none',
+        }}>
+          {expired ? '00:00:00' : `${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`}
+        </p>
+
+        {/* Progress bar — raw/utilitarian */}
+        <div style={{ marginTop: '10px', height: '6px', background: '#e2e8f0', borderRadius: '0' }}>
+          <div style={{
+            height: '100%', width: `${usedPct}%`,
+            background: statusColor.bar,
+            transition: 'width 1s linear',
+          }} />
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div style={{ display: 'flex', gap: '8px' }}>
+        <button onClick={onExtend} style={{
+          flex: 1, padding: '10px',
+          background: '#1d4ed8', color: '#fff',
+          border: 'none', borderRadius: '4px',
+          fontSize: '13px', fontWeight: 700,
+          cursor: 'pointer', letterSpacing: '0.5px',
+          textTransform: 'uppercase'
+        }}>
+          + Extend
         </button>
-        <button onClick={onCheckout}
-          className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm font-semibold transition-colors">
+        <button onClick={onCheckout} style={{
+          flex: 1, padding: '10px',
+          background: '#fff', color: '#dc2626',
+          border: '2px solid #dc2626', borderRadius: '4px',
+          fontSize: '13px', fontWeight: 700,
+          cursor: 'pointer', letterSpacing: '0.5px',
+          textTransform: 'uppercase'
+        }}>
           Check Out
         </button>
       </div>
@@ -75,11 +128,11 @@ function MyBookingCard({ session, spot, onExtend, onCheckout }) {
   );
 }
 
-// Checkout Modal
+// ─── Checkout Modal ─────────────────────────────────────────────────────────
 function CheckoutModal({ session, spot, onConfirm, onCancel }) {
   const [busy, setBusy] = useState(false);
   const actualHours = Math.max(1, Math.ceil((Date.now() - new Date(session.entry_time).getTime()) / 3600000));
-  const cost = actualHours * (spot?.hourly_rate || 5);
+  const cost = actualHours * (spot?.hourly_rate || 50);
 
   const handleConfirm = async () => {
     setBusy(true);
@@ -88,26 +141,70 @@ function CheckoutModal({ session, spot, onConfirm, onCancel }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
-        <div className="bg-gradient-to-r from-red-500 to-rose-600 px-6 py-4">
-          <h3 className="text-white font-bold text-lg">Confirm Check-Out</h3>
-          <p className="text-white/70 text-sm">Spot {session.spot_number} · {session.license_plate}</p>
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 50, padding: '16px',
+      backdropFilter: 'blur(2px)',
+    }}>
+      <div style={{
+        background: '#fff', width: '100%', maxWidth: '360px',
+        borderRadius: '6px', overflow: 'hidden',
+        border: '2px solid #0f172a',
+        fontFamily: "'DM Mono', 'Courier New', monospace",
+      }}>
+        {/* Header stripe */}
+        <div style={{ background: '#0f172a', padding: '16px 20px' }}>
+          <p style={{ color: '#f8fafc', fontSize: '11px', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '4px' }}>
+            CONFIRM CHECKOUT
+          </p>
+          <p style={{ color: '#94a3b8', fontSize: '13px' }}>
+            {session.spot_number} · {session.license_plate}
+          </p>
         </div>
-        <div className="p-6 space-y-4">
-          <div className="bg-slate-50 rounded-xl p-4 space-y-2 text-sm">
-            <div className="flex justify-between"><span className="text-slate-500">Entry time</span><span className="font-medium">{new Date(session.entry_time).toLocaleTimeString()}</span></div>
-            <div className="flex justify-between"><span className="text-slate-500">Duration</span><span className="font-medium">{actualHours}h</span></div>
-            <div className="flex justify-between"><span className="text-slate-500">Rate</span><span className="font-medium">${spot?.hourly_rate || 5}/hr</span></div>
-            <div className="flex justify-between border-t border-slate-200 pt-2 mt-2">
-              <span className="font-bold text-slate-700">Total Amount Due</span>
-              <span className="font-bold text-green-700 text-xl">${cost}</span>
+
+        {/* Breakdown */}
+        <div style={{ padding: '20px' }}>
+          <div style={{ border: '1px solid #e2e8f0', borderRadius: '4px', padding: '14px', marginBottom: '16px' }}>
+            {[
+              ['Entry Time', new Date(session.entry_time).toLocaleTimeString('en-IN')],
+              ['Duration', `${actualHours} hr`],
+              ['Rate', `₹${spot?.hourly_rate || 50}/hr`],
+            ].map(([label, val]) => (
+              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px' }}>
+                <span style={{ color: '#64748b' }}>{label}</span>
+                <span style={{ color: '#0f172a', fontWeight: 600 }}>{val}</span>
+              </div>
+            ))}
+            <div style={{
+              borderTop: '2px dashed #e2e8f0', paddingTop: '10px', marginTop: '6px',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+            }}>
+              <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                Total Due
+              </span>
+              <span style={{ fontSize: '22px', fontWeight: 800, color: '#16a34a' }}>₹{cost}</span>
             </div>
           </div>
-          <div className="flex gap-3">
-            <button onClick={onCancel} className="flex-1 py-3 border-2 border-slate-200 text-slate-700 rounded-xl font-semibold">Cancel</button>
-            <button onClick={handleConfirm} disabled={busy} className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold">
-              {busy ? 'Processing...' : `Pay $${cost} & Exit`}
+
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button onClick={onCancel} style={{
+              flex: 1, padding: '12px',
+              background: '#fff', color: '#475569',
+              border: '1.5px solid #cbd5e1', borderRadius: '4px',
+              fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+              textTransform: 'uppercase', letterSpacing: '0.5px',
+            }}>
+              Cancel
+            </button>
+            <button onClick={handleConfirm} disabled={busy} style={{
+              flex: 1, padding: '12px',
+              background: busy ? '#94a3b8' : '#16a34a', color: '#fff',
+              border: 'none', borderRadius: '4px',
+              fontSize: '13px', fontWeight: 700, cursor: busy ? 'not-allowed' : 'pointer',
+              textTransform: 'uppercase', letterSpacing: '0.5px',
+            }}>
+              {busy ? 'Processing…' : `Pay ₹${cost}`}
             </button>
           </div>
         </div>
@@ -116,6 +213,22 @@ function CheckoutModal({ session, spot, onConfirm, onCancel }) {
   );
 }
 
+// ─── Stat Pill ───────────────────────────────────────────────────────────────
+function StatPill({ value, label, color }) {
+  return (
+    <div style={{
+      background: '#fff', border: `2px solid ${color}20`,
+      borderLeft: `4px solid ${color}`,
+      padding: '12px 16px', borderRadius: '4px',
+      fontFamily: "'DM Mono', 'Courier New', monospace",
+    }}>
+      <p style={{ fontSize: '26px', fontWeight: 800, color, lineHeight: 1 }}>{value}</p>
+      <p style={{ fontSize: '10px', color: '#94a3b8', marginTop: '4px', textTransform: 'uppercase', letterSpacing: '1px' }}>{label}</p>
+    </div>
+  );
+}
+
+// ─── Main Page ───────────────────────────────────────────────────────────────
 export default function UserPage({ user, onLogout }) {
   const [activeTab, setActiveTab] = useState('map');
   const [spots, setSpots] = useState([]);
@@ -136,34 +249,17 @@ export default function UserPage({ user, onLogout }) {
 
   const fetchData = useCallback(async () => {
     try {
-      console.log('Fetching data...');
-      
       const [spotsData, zonesData, sessionsData] = await Promise.all([
         apiRequest('/parking/spots'),
         apiRequest('/parking/zones'),
         apiRequest('/parking/sessions/my'),
       ]);
-      
-      console.log('Sessions API response:', sessionsData);
-      
       setSpots(spotsData.data?.spots || []);
       setZones(zonesData.data?.zones || []);
-      
       const allSessions = sessionsData.sessions || sessionsData.data?.sessions || [];
-      
-      console.log('All sessions count:', allSessions.length);
-      
-      // ✅ FIXED: Filter by payment_status instead of end_time
-      const active = allSessions.filter(s => s.payment_status === 'pending');
-      const completed = allSessions.filter(s => s.payment_status === 'paid');
-      
-      setActiveSessions(active);
-      setCompletedSessions(completed);
-      
-      console.log('Active sessions:', active.length);
-      console.log('Completed sessions:', completed.length);
-    } catch (err) {
-      console.error('Fetch error:', err);
+      setActiveSessions(allSessions.filter(s => s.payment_status === 'pending'));
+      setCompletedSessions(allSessions.filter(s => s.payment_status === 'paid'));
+    } catch {
       showNotif('error', 'Failed to refresh');
     } finally {
       setLoading(false);
@@ -171,190 +267,201 @@ export default function UserPage({ user, onLogout }) {
   }, [showNotif]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
-
   useEffect(() => {
     refreshRef.current = setInterval(fetchData, 10000);
-    return () => { if (refreshRef.current) clearInterval(refreshRef.current); };
+    return () => clearInterval(refreshRef.current);
   }, [fetchData]);
 
   const handleBooking = async (licensePlate, durationHours) => {
     if (!selectedSpot) return;
     try {
-      console.log('Booking spot:', selectedSpot.id, licensePlate, durationHours);
-      
-      const result = await apiRequest('/parking/book', {
+      await apiRequest('/parking/book', {
         method: 'POST',
-        body: JSON.stringify({ 
-          spotId: selectedSpot.id, 
-          licensePlate, 
-          durationHours 
-        })
+        body: JSON.stringify({ spotId: selectedSpot.id, licensePlate, durationHours }),
       });
-      
-      console.log('Booking result:', result);
-      
       await fetchData();
       setSelectedSpot(null);
       showNotif('success', `Spot ${selectedSpot.spot_number} booked for ${durationHours}h!`);
       setActiveTab('mybookings');
-    } catch (err) {
-      console.error('Booking error:', err);
-      showNotif('error', err.message);
-    }
+    } catch (err) { showNotif('error', err.message); }
   };
 
   const handleCheckout = async () => {
     if (!checkoutSession) return;
     try {
-      console.log('Checking out session:', checkoutSession.id);
-      
       await apiRequest('/parking/checkout', {
         method: 'POST',
-        body: JSON.stringify({ sessionId: checkoutSession.id })
+        body: JSON.stringify({ sessionId: checkoutSession.id }),
       });
-      
       await fetchData();
       setCheckoutSession(null);
       showNotif('success', 'Checked out successfully!');
       setActiveTab('history');
-    } catch (err) {
-      console.error('Checkout error:', err);
-      showNotif('error', err.message);
-    }
+    } catch (err) { showNotif('error', err.message); }
   };
 
   const handleExtend = async (extraHours) => {
     if (!extendSpot) return;
     try {
-      console.log('Extending spot:', extendSpot.id, extraHours);
-      
       await apiRequest('/parking/extend', {
         method: 'POST',
-        body: JSON.stringify({ spotId: extendSpot.id, extraHours })
+        body: JSON.stringify({ spotId: extendSpot.id, extraHours }),
       });
-      
       await fetchData();
       showNotif('success', `Extended by ${extraHours} hours!`);
       setExtendSpot(null);
-    } catch (err) {
-      console.error('Extend error:', err);
-      showNotif('error', err.message);
-    }
+    } catch (err) { showNotif('error', err.message); }
   };
 
   const availableSpots = spots.filter(s => !s.is_occupied && !s.is_reserved).length;
   const occupiedSpots = spots.filter(s => s.is_occupied).length;
   const evFreeSpots = spots.filter(s => s.spot_type === 'electric' && !s.is_occupied).length;
 
+  const TABS = [
+    { id: 'map', label: 'Book a Spot' },
+    { id: 'mybookings', label: `Bookings (${activeSessions.length})` },
+    { id: 'history', label: 'History' },
+  ];
+
+  const mono = { fontFamily: "'DM Mono', 'Courier New', monospace" };
+
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-100">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-        <p className="mt-4 text-slate-600">Loading...</p>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9', ...mono }}>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ width: '36px', height: '36px', border: '3px solid #1d4ed8', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto' }} />
+        <p style={{ marginTop: '12px', color: '#64748b', fontSize: '13px', letterSpacing: '1px' }}>LOADING…</p>
       </div>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+    <div style={{ minHeight: '100vh', background: '#f1f5f9', ...mono }}>
       <Toast notif={notif} />
 
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-md">
-              <svg className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                <rect x="2" y="4" width="20" height="16" rx="2" />
-                <path d="M8 4v16M16 4v16M2 12h20" />
-              </svg>
-            </div>
+      {/* ── Header ── */}
+      <header style={{
+        background: '#0f172a', position: 'sticky', top: 0, zIndex: 40,
+        borderBottom: '3px solid #1d4ed8',
+      }}>
+        <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '56px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{
+              width: '32px', height: '32px', background: '#1d4ed8',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontWeight: 900, fontSize: '16px', color: '#fff', borderRadius: '3px',
+              letterSpacing: '-1px',
+            }}>P</div>
             <div>
-              <h1 className="text-lg font-bold text-slate-900">SmartPark</h1>
-              <p className="text-xs text-slate-500 -mt-0.5">Customer Portal</p>
+              <p style={{ color: '#f8fafc', fontWeight: 800, fontSize: '15px', letterSpacing: '1px' }}>SMARTPARK</p>
+              <p style={{ color: '#64748b', fontSize: '10px', letterSpacing: '1.5px', marginTop: '-2px' }}>CUSTOMER PORTAL</p>
             </div>
           </div>
-          <button onClick={onLogout} className="px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-xl transition-colors">
-            Logout
+          <button onClick={onLogout} style={{
+            padding: '6px 14px', background: 'transparent',
+            border: '1px solid #dc2626', color: '#f87171',
+            borderRadius: '3px', fontSize: '11px', cursor: 'pointer',
+            letterSpacing: '1px', textTransform: 'uppercase',
+          }}>
+            LOGOUT
           </button>
         </div>
 
-        <div className="max-w-4xl mx-auto px-4 sm:px-6">
-          <div className="flex gap-1 py-1">
-            {[
-              { id: 'map', label: 'Book a Spot', icon: '🗺️' },
-              { id: 'mybookings', label: `My Bookings (${activeSessions.length})`, icon: '🅿️' },
-              { id: 'history', label: 'History', icon: '📋' },
-            ].map(tab => (
-              <button 
-                key={tab.id} 
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  activeTab === tab.id 
-                    ? 'bg-blue-600 text-white shadow-sm' 
-                    : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <span>{tab.icon}</span>
-                <span>{tab.label}</span>
-              </button>
-            ))}
-          </div>
+        {/* Tab bar */}
+        <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 20px', display: 'flex', gap: '0' }}>
+          {TABS.map(tab => (
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
+              padding: '10px 18px',
+              background: 'none', border: 'none', cursor: 'pointer',
+              fontSize: '12px', fontWeight: 700,
+              textTransform: 'uppercase', letterSpacing: '1px',
+              color: activeTab === tab.id ? '#60a5fa' : '#64748b',
+              borderBottom: activeTab === tab.id ? '3px solid #3b82f6' : '3px solid transparent',
+              transition: 'color 0.15s',
+              fontFamily: 'inherit',
+            }}>
+              {tab.label}
+            </button>
+          ))}
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
+      <main style={{ maxWidth: '900px', margin: '0 auto', padding: '24px 20px' }}>
 
-        {/* Book a Spot Tab */}
+        {/* ── Book a Spot ── */}
         {activeTab === 'map' && (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-2xl font-bold text-slate-900">Find & Book a Spot</h2>
-              <p className="text-slate-500 text-sm">Click any green spot to start a booking</p>
+          <div>
+            <div style={{ marginBottom: '20px' }}>
+              <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.5px' }}>Find & Book a Spot</h2>
+              <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px', letterSpacing: '0.5px' }}>Select any available slot below</p>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
-              <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 text-center">
-                <p className="text-3xl font-bold text-green-600">{availableSpots}</p>
-                <p className="text-xs text-slate-500 mt-1">Available</p>
-              </div>
-              <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 text-center">
-                <p className="text-3xl font-bold text-red-500">{occupiedSpots}</p>
-                <p className="text-xs text-slate-500 mt-1">Occupied</p>
-              </div>
-              <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 text-center">
-                <p className="text-3xl font-bold text-emerald-600">{evFreeSpots}</p>
-                <p className="text-xs text-slate-500 mt-1">EV Free</p>
-              </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '24px' }}>
+              <StatPill value={availableSpots} label="Available" color="#16a34a" />
+              <StatPill value={occupiedSpots} label="Occupied" color="#dc2626" />
+              <StatPill value={evFreeSpots} label="EV Free" color="#0ea5e9" />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '16px' }}>
               {zones.map(zone => {
                 const zoneSpots = spots.filter(s => s.zone_id === zone.id);
                 const available = zoneSpots.filter(s => !s.is_occupied && !s.is_reserved).length;
                 return (
-                  <div key={zone.id} className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-                    <div className="flex items-center justify-between mb-3">
+                  <div key={zone.id} style={{
+                    background: '#fff', border: '1.5px solid #e2e8f0',
+                    borderTop: '3px solid #1d4ed8',
+                    padding: '16px', borderRadius: '4px',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
                       <div>
-                        <h3 className="font-bold text-slate-900 text-lg">Zone {zone.name}</h3>
-                        <p className="text-xs text-slate-500">{available} of {zone.total_spots} free</p>
+                        <h3 style={{ fontWeight: 800, color: '#0f172a', fontSize: '15px', letterSpacing: '0.5px' }}>
+                          ZONE {zone.name}
+                        </h3>
+                        <p style={{ fontSize: '11px', color: '#64748b', letterSpacing: '0.5px' }}>
+                          {available}/{zone.total_spots} free
+                        </p>
+                      </div>
+                      <div style={{
+                        width: '36px', height: '36px', borderRadius: '50%',
+                        background: available > 0 ? '#dcfce7' : '#fee2e2',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '16px', fontWeight: 800,
+                        color: available > 0 ? '#16a34a' : '#dc2626',
+                      }}>
+                        {available}
                       </div>
                     </div>
-                    <div className="grid grid-cols-4 gap-1.5">
-                      {zoneSpots.map(spot => (
-                        <button
-                          key={spot.id}
-                          onClick={() => !spot.is_occupied && !spot.is_reserved ? setSelectedSpot(spot) : null}
-                          disabled={spot.is_occupied || spot.is_reserved}
-                          className={`aspect-square rounded-lg ${getSpotColor(spot)} transition-all duration-200 flex flex-col items-center justify-center shadow-sm ${
-                            !spot.is_occupied ? 'hover:scale-105' : 'cursor-not-allowed opacity-80'
-                          } relative`}
-                        >
-                          <span className="text-[8px] font-bold text-white leading-tight drop-shadow">{spot.spot_number}</span>
-                          {spot.is_occupied && spot.booking && !spot.booking.expired && (
-                            <CountdownBadge endTime={spot.booking.endTime} />
-                          )}
-                        </button>
-                      ))}
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
+                      {zoneSpots.map(spot => {
+                        const free = !spot.is_occupied && !spot.is_reserved;
+                        return (
+                          <button
+                            key={spot.id}
+                            onClick={() => free ? setSelectedSpot(spot) : null}
+                            disabled={!free}
+                            style={{
+                              aspectRatio: '1',
+                              background: free ? '#1d4ed8' : spot.is_reserved ? '#d97706' : '#64748b',
+                              border: free ? '2px solid #1e40af' : '2px solid transparent',
+                              borderRadius: '3px',
+                              cursor: free ? 'pointer' : 'not-allowed',
+                              fontSize: '9px', fontWeight: 700, color: '#fff',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              letterSpacing: '0.3px',
+                              opacity: free ? 1 : 0.6,
+                              transition: 'transform 0.1s',
+                              fontFamily: 'inherit',
+                            }}
+                            onMouseEnter={e => free && (e.currentTarget.style.transform = 'scale(1.08)')}
+                            onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
+                          >
+                            {spot.spot_number}
+                            {spot.is_occupied && spot.booking && !spot.booking.expired && (
+                              <CountdownBadge endTime={spot.booking.endTime} />
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 );
@@ -363,15 +470,18 @@ export default function UserPage({ user, onLogout }) {
           </div>
         )}
 
-        {/* My Bookings Tab */}
+        {/* ── My Bookings ── */}
         {activeTab === 'mybookings' && (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-2xl font-bold text-slate-900">My Active Bookings</h2>
-              <p className="text-slate-500 text-sm">{activeSessions.length} active booking(s)</p>
+          <div>
+            <div style={{ marginBottom: '20px' }}>
+              <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a' }}>Active Bookings</h2>
+              <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px', letterSpacing: '0.5px' }}>
+                {activeSessions.length} session{activeSessions.length !== 1 ? 's' : ''} active
+              </p>
             </div>
+
             {activeSessions.length > 0 ? (
-              <div className="space-y-4">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {activeSessions.map(session => {
                   const spot = spots.find(s => s.spot_number === session.spot_number);
                   return (
@@ -386,85 +496,118 @@ export default function UserPage({ user, onLogout }) {
                 })}
               </div>
             ) : (
-              <div className="bg-white rounded-2xl p-12 text-center shadow-sm border border-slate-100">
-                <div className="text-6xl mb-4">🅿️</div>
-                <h3 className="text-slate-700 font-semibold text-lg mb-2">No Active Bookings</h3>
-                <button 
-                  onClick={() => setActiveTab('map')} 
-                  className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold"
-                >
-                  Find a Spot
+              <div style={{
+                background: '#fff', border: '1.5px solid #e2e8f0',
+                borderRadius: '4px', padding: '48px 24px',
+                textAlign: 'center',
+              }}>
+                <p style={{ fontSize: '36px', marginBottom: '10px' }}>🅿</p>
+                <p style={{ fontWeight: 700, color: '#0f172a', fontSize: '15px', marginBottom: '6px' }}>No Active Bookings</p>
+                <p style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '18px' }}>Book a parking slot to get started</p>
+                <button onClick={() => setActiveTab('map')} style={{
+                  padding: '10px 24px', background: '#1d4ed8', color: '#fff',
+                  border: 'none', borderRadius: '3px', fontSize: '12px',
+                  fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase',
+                  letterSpacing: '1px', fontFamily: 'inherit',
+                }}>
+                  Find a Spot →
                 </button>
               </div>
             )}
           </div>
         )}
 
-        {/* History Tab */}
+        {/* ── History ── */}
         {activeTab === 'history' && (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-2xl font-bold text-slate-900">Parking History</h2>
-              <p className="text-slate-500 text-sm">{completedSessions.length} completed session(s)</p>
+          <div>
+            <div style={{ marginBottom: '20px' }}>
+              <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a' }}>Parking History</h2>
+              <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px', letterSpacing: '0.5px' }}>
+                {completedSessions.length} completed session{completedSessions.length !== 1 ? 's' : ''}
+              </p>
             </div>
+
             {completedSessions.length > 0 ? (
-              <div className="space-y-3">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {completedSessions.map(session => {
-                  const amount = typeof session.total_amount === 'number' 
-                    ? session.total_amount.toFixed(2) 
+                  const amount = typeof session.total_amount === 'number'
+                    ? session.total_amount.toFixed(2)
                     : (session.total_amount || '0');
-                  
                   return (
-                    <div key={session.id} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center gap-4">
-                      <div className="h-12 w-12 rounded-xl bg-green-100 flex items-center justify-center text-green-600 font-bold text-sm">
-                        ✓
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-900">Spot {session.spot_number}</span>
-                          <span className="text-xs bg-slate-100 text-slate-600 rounded-full px-2 py-0.5">Zone {session.zone_name}</span>
+                    <div key={session.id} style={{
+                      background: '#fff', border: '1.5px solid #e2e8f0',
+                      borderLeft: '4px solid #16a34a',
+                      borderRadius: '4px', padding: '14px 16px',
+                      display: 'flex', alignItems: 'center', gap: '14px',
+                    }}>
+                      <div style={{
+                        width: '36px', height: '36px', background: '#f0fdf4',
+                        border: '1.5px solid #bbf7d0',
+                        borderRadius: '3px', display: 'flex', alignItems: 'center',
+                        justifyContent: 'center', color: '#16a34a',
+                        fontSize: '16px', flexShrink: 0,
+                      }}>✓</div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '14px' }}>
+                            Spot {session.spot_number}
+                          </span>
+                          <span style={{
+                            fontSize: '10px', color: '#475569',
+                            background: '#f1f5f9', padding: '1px 6px',
+                            borderRadius: '2px', fontWeight: 600, letterSpacing: '0.5px',
+                          }}>
+                            ZONE {session.zone_name}
+                          </span>
                         </div>
-                        <p className="text-xs text-slate-400">
-                          {fmtDateTime(session.entry_time)} · {session.duration_hours}h parked
+                        <p style={{ fontSize: '11px', color: '#94a3b8', marginTop: '3px' }}>
+                          {fmtDateTime(session.entry_time)} · {session.duration_hours}h
                         </p>
                       </div>
-                      <div className="text-right">
-                        <p className="font-bold text-green-700">${amount}</p>
-                        <span className="text-xs bg-green-100 text-green-700 rounded-full px-2 py-0.5">Paid</span>
+                      <div style={{ textAlign: 'right' }}>
+                        <p style={{ fontWeight: 800, color: '#16a34a', fontSize: '16px' }}>₹{amount}</p>
+                        <span style={{
+                          fontSize: '10px', color: '#16a34a',
+                          background: '#f0fdf4', padding: '1px 6px',
+                          borderRadius: '2px', fontWeight: 700, letterSpacing: '0.5px',
+                        }}>PAID</span>
                       </div>
                     </div>
                   );
                 })}
               </div>
             ) : (
-              <div className="bg-white rounded-2xl p-12 text-center shadow-sm border border-slate-100">
-                <div className="text-6xl mb-4">📋</div>
-                <h3 className="text-slate-700 font-semibold text-lg mb-2">No History Yet</h3>
-                <p className="text-slate-400 text-sm">Your completed parking sessions will appear here.</p>
+              <div style={{
+                background: '#fff', border: '1.5px solid #e2e8f0',
+                borderRadius: '4px', padding: '48px 24px', textAlign: 'center',
+              }}>
+                <p style={{ fontSize: '36px', marginBottom: '10px' }}>📋</p>
+                <p style={{ fontWeight: 700, color: '#0f172a', fontSize: '15px', marginBottom: '6px' }}>No History Yet</p>
+                <p style={{ fontSize: '12px', color: '#94a3b8' }}>Completed sessions will appear here.</p>
               </div>
             )}
           </div>
         )}
       </main>
 
-      {/* Modals */}
+      {/* ── Modals ── */}
       {selectedSpot && !selectedSpot.is_occupied && (
-        <SpotModal 
-          spot={selectedSpot} 
-          sessions={[]} 
+        <SpotModal
+          spot={selectedSpot}
+          sessions={[]}
           onClose={() => setSelectedSpot(null)}
-          onEntry={handleBooking} 
-          onExit={async () => {}} 
-          onOpenExtend={() => {}} 
-          userView={true} 
+          onEntry={handleBooking}
+          onExit={async () => {}}
+          onOpenExtend={() => {}}
+          userView={true}
         />
       )}
 
       {extendSpot && (
-        <ExtendModal 
-          spot={extendSpot} 
-          onClose={() => setExtendSpot(null)} 
-          onExtend={handleExtend} 
+        <ExtendModal
+          spot={extendSpot}
+          onClose={() => setExtendSpot(null)}
+          onExtend={handleExtend}
         />
       )}
 
@@ -476,6 +619,12 @@ export default function UserPage({ user, onLogout }) {
           onCancel={() => setCheckoutSession(null)}
         />
       )}
+
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500;700&display=swap');
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+      `}</style>
     </div>
   );
 }

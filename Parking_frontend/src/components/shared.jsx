@@ -20,10 +20,10 @@ const apiRequest = async (endpoint, options = {}) => {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 export function fmtTime(iso) {
-  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
 }
 export function fmtDateTime(iso) {
-  return new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return new Date(iso).toLocaleString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 // ─── Countdown Hook ───────────────────────────────────────────────────────────
@@ -124,7 +124,7 @@ export function ExtendModal({ spot, onClose, onExtend }) {
               <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M18 6L6 18M6 6l12 12" /></svg>
             </button>
           </div>
-          <p className="text-white/70 text-sm">{booking.licensePlate} · ${spot.hourly_rate}/hr</p>
+          <p className="text-white/70 text-sm">{booking.licensePlate} · ₹{spot.hourly_rate}/hr</p>
         </div>
 
         <div className="p-6 space-y-5 max-h-[72vh] overflow-y-auto">
@@ -182,14 +182,14 @@ export function ExtendModal({ spot, onClose, onExtend }) {
             <h4 className="font-semibold text-slate-800 mb-3">Extension Summary</h4>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between"><span className="text-slate-600">Adding</span><span className="font-bold">{extra}h</span></div>
-              <div className="flex justify-between"><span className="text-slate-600">Rate</span><span className="font-semibold">${spot.hourly_rate}/hr</span></div>
+              <div className="flex justify-between"><span className="text-slate-600">Rate</span><span className="font-semibold">₹{spot.hourly_rate}/hr</span></div>
               <div className="flex justify-between"><span className="text-slate-600">Old end time</span><span className="line-through opacity-50">{fmtDateTime(booking.endTime)}</span></div>
               <div className="flex justify-between"><span className="text-slate-600">New end time</span><span className="font-bold text-green-700">{fmtDateTime(newEndTime.toISOString())}</span></div>
               <div className="border-t border-blue-200 pt-2 flex justify-between">
                 <span className="font-bold">Additional Cost</span>
-                <span className="font-bold text-blue-700 text-xl">${additionalCost}</span>
+                <span className="font-bold text-blue-700 text-xl">₹{additionalCost}</span>
               </div>
-              {totalExtended > 0 && <div className="flex justify-between text-xs text-slate-400"><span>Total extended (incl. this)</span><span>{totalExtended}h · ${totalExtended * spot.hourly_rate}</span></div>}
+              {totalExtended > 0 && <div className="flex justify-between text-xs text-slate-400"><span>Total extended (incl. this)</span><span>{totalExtended}h · ₹{totalExtended * spot.hourly_rate}</span></div>}
             </div>
           </div>
 
@@ -218,7 +218,7 @@ export function ExtendModal({ spot, onClose, onExtend }) {
             <button onClick={onClose} className="flex-1 py-3 border-2 border-slate-200 text-slate-700 rounded-xl font-semibold hover:bg-slate-50 transition-colors">Cancel</button>
             <button onClick={doExtend} disabled={busy}
               className="flex-[2] py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-bold shadow-md disabled:opacity-50 flex items-center justify-center gap-2 transition-all">
-              {busy ? (<><svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" /></svg>Extending...</>) : (<>Extend by {extra}h · ${additionalCost}</>)}
+              {busy ? (<><svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" /></svg>Extending...</>) : (<>Extend by {extra}h · ₹{additionalCost}</>)}
             </button>
           </div>
         </div>
@@ -249,7 +249,7 @@ export function SpotModal({ spot, sessions, onClose, onEntry, onExit, onOpenExte
         <div className={`px-6 py-4 flex items-center justify-between ${headerBg}`}>
           <div>
             <h3 className="text-white font-bold text-lg">Spot {spot.spot_number}</h3>
-            <p className="text-white/80 text-sm">Zone {spot.zone_name} · {spot.spot_type} · ${spot.hourly_rate}/hr</p>
+            <p className="text-white/80 text-sm">Zone {spot.zone_name} · {spot.spot_type} · ₹{spot.hourly_rate}/hr</p>
           </div>
           <button onClick={onClose} className="text-white/80 hover:text-white">
             <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M18 6L6 18M6 6l12 12" /></svg>
@@ -271,7 +271,7 @@ export function SpotModal({ spot, sessions, onClose, onEntry, onExit, onOpenExte
                 <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-500">
                   <div><span className="font-medium">Vehicle:</span> {booking.licensePlate}</div>
                   <div><span className="font-medium">Booked:</span> {booking.durationHours}h</div>
-                  <div><span className="font-medium">Rate:</span> ${spot.hourly_rate}/hr</div>
+                  <div><span className="font-medium">Rate:</span> ₹{spot.hourly_rate}/hr</div>
                   <div><span className="font-medium">Extended:</span> {booking.totalExtendedHours || 0}h</div>
                 </div>
               </div>
@@ -292,7 +292,7 @@ export function SpotModal({ spot, sessions, onClose, onEntry, onExit, onOpenExte
                   <div className="bg-slate-50 rounded-xl p-3 text-sm space-y-1">
                     <div className="flex justify-between"><span className="text-slate-500">Since</span><span className="font-medium">{fmtTime(session?.entry_time || booking.startTime)}</span></div>
                     <div className="flex justify-between"><span className="text-slate-500">Duration</span><span className="font-medium">{Math.max(1, Math.ceil((Date.now() - new Date(session?.entry_time || booking.startTime).getTime()) / 3600000))}h</span></div>
-                    <div className="flex justify-between border-t border-slate-200 pt-1"><span className="font-semibold">Amount Due</span><span className="font-bold text-green-700 text-base">${actualCost}</span></div>
+                    <div className="flex justify-between border-t border-slate-200 pt-1"><span className="font-semibold">Amount Due</span><span className="font-bold text-green-700 text-base">₹{actualCost}</span></div>
                   </div>
                   <button onClick={doExit} disabled={busy} className="w-full py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
                     {busy ? 'Processing...' : 'Confirm Check-Out'}
@@ -304,7 +304,7 @@ export function SpotModal({ spot, sessions, onClose, onEntry, onExit, onOpenExte
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">License Plate</label>
-                <input type="text" value={plate} onChange={e => setPlate(e.target.value.toUpperCase())} placeholder="e.g. ABC-1234"
+                <input type="text" value={plate} onChange={e => setPlate(e.target.value.toUpperCase())} placeholder="e.g. TN01AB1234"
                   className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase tracking-widest font-mono text-lg text-center" />
               </div>
               <div>
@@ -323,13 +323,13 @@ export function SpotModal({ spot, sessions, onClose, onEntry, onExit, onOpenExte
               </div>
               <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 space-y-2 border border-blue-100">
                 <div className="flex justify-between text-sm"><span className="text-slate-600">Duration</span><span className="font-semibold">{duration}h</span></div>
-                <div className="flex justify-between text-sm"><span className="text-slate-600">Rate</span><span className="font-semibold">${spot.hourly_rate}/hr</span></div>
-                <div className="flex justify-between text-sm"><span className="text-slate-600">Ends at</span><span className="font-semibold">{new Date(Date.now() + duration * 3600 * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></div>
-                <div className="border-t border-blue-200 pt-2 flex justify-between"><span className="font-bold text-slate-700">Estimated Total</span><span className="font-bold text-blue-700 text-xl">${estimatedCost}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-slate-600">Rate</span><span className="font-semibold">₹{spot.hourly_rate}/hr</span></div>
+                <div className="flex justify-between text-sm"><span className="text-slate-600">Ends at</span><span className="font-semibold">{new Date(Date.now() + duration * 3600 * 1000).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span></div>
+                <div className="border-t border-blue-200 pt-2 flex justify-between"><span className="font-bold text-slate-700">Estimated Total</span><span className="font-bold text-blue-700 text-xl">₹{estimatedCost}</span></div>
               </div>
               <button onClick={doEntry} disabled={!plate || busy}
                 className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-bold shadow-md transition-all disabled:opacity-50 flex items-center justify-center gap-2">
-                {busy ? 'Booking...' : `Book for ${duration}h · $${estimatedCost}`}
+                {busy ? 'Booking...' : `Book for ${duration}h · ₹${estimatedCost}`}
               </button>
             </div>
           )}
@@ -354,7 +354,7 @@ export function BookingTimerRow({ session, spots, onExtend, showExtend = true })
           {(session.total_extended_hours || 0) > 0 && <span className="text-xs bg-orange-100 text-orange-700 rounded-full px-2 py-0.5 font-medium w-fit">+{session.total_extended_hours}h ext.</span>}
         </div>
       </td>
-      <td className="py-3 px-4 text-sm text-slate-600">{new Date(session.entry_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+      <td className="py-3 px-4 text-sm text-slate-600">{new Date(session.entry_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</td>
       <td className="py-3 px-4 text-sm font-medium">
         {expired ? <span className="text-red-600 font-bold text-xs bg-red-100 px-2 py-1 rounded-full">EXPIRED</span> : (
           <span className={`font-mono font-bold ${critical ? 'text-red-600 animate-pulse' : warning ? 'text-amber-600' : 'text-slate-700'}`}>
@@ -362,7 +362,7 @@ export function BookingTimerRow({ session, spots, onExtend, showExtend = true })
           </span>
         )}
       </td>
-      <td className="py-3 px-4 text-sm text-slate-600">${(spot?.hourly_rate || 5) * session.duration_hours}</td>
+      <td className="py-3 px-4 text-sm text-slate-600">₹{(spot?.hourly_rate || 50) * session.duration_hours}</td>
       {showExtend && (
         <td className="py-3 px-4">
           <button onClick={() => spot && onExtend(spot)} disabled={!spot || !spot.booking}
