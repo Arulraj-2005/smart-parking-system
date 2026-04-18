@@ -90,25 +90,31 @@ export function Toast({ notif }) {
 
 // ─── Extend Booking Modal ──────────────────────────────────────────────────────
 export function ExtendModal({ spot, onClose, onExtend }) {
+  // Safety check - prevent white screen if booking data is missing
+  if (!spot || !spot.booking || !spot.booking.endTime) {
+    console.warn('ExtendModal: Missing booking data', spot);
+    return null;
+  }
+  
   const [extra, setExtra] = useState(1);
   const [busy, setBusy] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
+  
   const booking = spot.booking;
   const { hours, minutes, seconds, expired, critical, warning } = useCountdown(booking.endTime);
   const newEndTime = new Date(new Date(booking.endTime).getTime() + extra * 3600 * 1000);
-  const additionalCost = extra * spot.hourly_rate;
-  const totalExtended = (booking.totalExtendedHours || 0) + extra;
-  const extensions = booking.extensions || [];
-  const urgencyBg = expired ? 'from-red-700 to-red-900' : critical ? 'from-red-500 to-orange-600' : warning ? 'from-amber-500 to-orange-500' : 'from-blue-600 to-indigo-700';
-  const urgencyLabel = expired ? 'BOOKING EXPIRED' : critical ? 'CRITICAL - Under 5 min!' : warning ? 'Expiring Soon' : 'Time Remaining';
-  const totalDuration = (booking.durationHours) * 3600 * 1000;
+  const additionalCost = extra * (spot.hourly_rate || 50);
+  const totalDuration = (booking.durationHours || 1) * 3600 * 1000;
   const used = totalDuration - (new Date(booking.endTime).getTime() - Date.now());
   const usedPct = Math.min(100, Math.max(0, (used / totalDuration) * 100));
+  
+  const urgencyBg = expired ? 'from-red-700 to-red-900' : critical ? 'from-red-500 to-orange-600' : warning ? 'from-amber-500 to-orange-500' : 'from-blue-600 to-indigo-700';
+  const urgencyLabel = expired ? 'BOOKING EXPIRED' : critical ? 'CRITICAL - Under 5 min!' : warning ? 'Expiring Soon' : 'Time Remaining';
 
   const doExtend = async () => {
     setBusy(true);
     await onExtend(extra);
     setBusy(false);
+    onClose();
   };
 
   return (
@@ -124,7 +130,7 @@ export function ExtendModal({ spot, onClose, onExtend }) {
               <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M18 6L6 18M6 6l12 12" /></svg>
             </button>
           </div>
-          <p className="text-white/70 text-sm">{booking.licensePlate} · ₹{spot.hourly_rate}/hr</p>
+          <p className="text-white/70 text-sm">{booking.licensePlate || 'N/A'} · ₹{spot.hourly_rate || 50}/hr</p>
         </div>
 
         <div className="p-6 space-y-5 max-h-[72vh] overflow-y-auto">
@@ -138,7 +144,7 @@ export function ExtendModal({ spot, onClose, onExtend }) {
             )}
             <div className="mt-3 mb-1">
               <div className="flex justify-between text-xs text-slate-500 mb-1">
-                <span>Start: {fmtTime(booking.startTime)}</span>
+                <span>Start: {fmtTime(booking.startTime || booking.entry_time)}</span>
                 <span>End: {fmtTime(booking.endTime)}</span>
               </div>
               <div className="h-2.5 bg-slate-200 rounded-full overflow-hidden">
@@ -146,18 +152,13 @@ export function ExtendModal({ spot, onClose, onExtend }) {
               </div>
               <p className="text-xs text-slate-400 mt-1 text-right">{usedPct.toFixed(0)}% time used</p>
             </div>
-            <div className="grid grid-cols-3 gap-2 mt-3 text-xs text-slate-600">
-              <div className="bg-white rounded-lg p-2 shadow-sm"><p className="font-semibold text-slate-900">{booking.durationHours - (booking.totalExtendedHours || 0)}h</p><p>Original</p></div>
-              <div className="bg-white rounded-lg p-2 shadow-sm"><p className="font-semibold text-orange-600">{booking.totalExtendedHours || 0}h</p><p>Extended</p></div>
-              <div className="bg-white rounded-lg p-2 shadow-sm"><p className="font-semibold text-blue-700">{booking.durationHours}h</p><p>Total</p></div>
-            </div>
           </div>
 
           {/* Quick Presets */}
           <div>
             <p className="text-sm font-semibold text-slate-700 mb-2">Quick Extend Options</p>
             <div className="grid grid-cols-4 gap-2">
-              {[1, 2, 3, 4, 6, 8, 12, 24].map(h => (
+              {[1, 2, 3, 4].map(h => (
                 <button key={h} onClick={() => setExtra(h)}
                   className={`py-2.5 rounded-xl text-sm font-semibold border-2 transition-all ${extra === h ? 'border-blue-600 bg-blue-600 text-white shadow-md scale-105' : 'border-slate-200 text-slate-700 hover:border-blue-300 hover:bg-blue-50'}`}>
                   +{h}h
@@ -182,43 +183,22 @@ export function ExtendModal({ spot, onClose, onExtend }) {
             <h4 className="font-semibold text-slate-800 mb-3">Extension Summary</h4>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between"><span className="text-slate-600">Adding</span><span className="font-bold">{extra}h</span></div>
-              <div className="flex justify-between"><span className="text-slate-600">Rate</span><span className="font-semibold">₹{spot.hourly_rate}/hr</span></div>
+              <div className="flex justify-between"><span className="text-slate-600">Rate</span><span className="font-semibold">₹{spot.hourly_rate || 50}/hr</span></div>
               <div className="flex justify-between"><span className="text-slate-600">Old end time</span><span className="line-through opacity-50">{fmtDateTime(booking.endTime)}</span></div>
               <div className="flex justify-between"><span className="text-slate-600">New end time</span><span className="font-bold text-green-700">{fmtDateTime(newEndTime.toISOString())}</span></div>
               <div className="border-t border-blue-200 pt-2 flex justify-between">
                 <span className="font-bold">Additional Cost</span>
                 <span className="font-bold text-blue-700 text-xl">₹{additionalCost}</span>
               </div>
-              {totalExtended > 0 && <div className="flex justify-between text-xs text-slate-400"><span>Total extended (incl. this)</span><span>{totalExtended}h · ₹{totalExtended * spot.hourly_rate}</span></div>}
             </div>
           </div>
-
-          {/* History */}
-          {extensions.length > 0 && (
-            <div className="border border-slate-200 rounded-xl overflow-hidden">
-              <button onClick={() => setShowHistory(h => !h)} className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 text-sm font-semibold text-slate-700">
-                <span>Extension History ({extensions.length})</span>
-                <svg className={`w-4 h-4 text-slate-400 transition-transform ${showHistory ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M19 9l-7 7-7-7" /></svg>
-              </button>
-              {showHistory && (
-                <div className="divide-y divide-slate-100">
-                  {extensions.map((ext, idx) => (
-                    <div key={idx} className="px-4 py-3 flex justify-between text-sm bg-white">
-                      <div><p className="font-medium">+{ext.addedHours}h added</p><p className="text-xs text-slate-400">{fmtDateTime(ext.extendedAt)}</p></div>
-                      <div className="text-right"><p className="text-xs text-slate-500">New end</p><p className="font-semibold text-green-700 text-xs">{fmtDateTime(ext.newEndTime)}</p></div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
 
           {/* Actions */}
           <div className="flex gap-3 pt-1">
             <button onClick={onClose} className="flex-1 py-3 border-2 border-slate-200 text-slate-700 rounded-xl font-semibold hover:bg-slate-50 transition-colors">Cancel</button>
             <button onClick={doExtend} disabled={busy}
               className="flex-[2] py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-bold shadow-md disabled:opacity-50 flex items-center justify-center gap-2 transition-all">
-              {busy ? (<><svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" /></svg>Extending...</>) : (<>Extend by {extra}h · ₹{additionalCost}</>)}
+              {busy ? 'Extending...' : `Extend by ${extra}h · ₹${additionalCost}`}
             </button>
           </div>
         </div>
@@ -236,8 +216,8 @@ export function SpotModal({ spot, sessions, onClose, onEntry, onExit, onOpenExte
   const session = sessions.find(s => s.spot_number === spot.spot_number && s.duration_minutes === 0);
   const booking = spot.booking;
   const { hours, minutes, seconds, expired, critical, warning } = useCountdown(booking?.endTime ?? null);
-  const estimatedCost = duration * spot.hourly_rate;
-  const actualCost = session ? Math.ceil((Date.now() - new Date(session.entry_time).getTime()) / 3600000) * spot.hourly_rate : 0;
+  const estimatedCost = duration * (spot.hourly_rate || 50);
+  const actualCost = session ? Math.ceil((Date.now() - new Date(session.entry_time).getTime()) / 3600000) * (spot.hourly_rate || 50) : 0;
   const headerBg = spot.is_occupied ? (expired ? 'bg-red-800' : critical ? 'bg-red-600' : warning ? 'bg-amber-500' : 'bg-red-500') : 'bg-gradient-to-r from-blue-600 to-indigo-700';
 
   const doEntry = async () => { if (!plate) return; setBusy(true); await onEntry(plate.toUpperCase(), duration); setBusy(false); };
@@ -249,7 +229,7 @@ export function SpotModal({ spot, sessions, onClose, onEntry, onExit, onOpenExte
         <div className={`px-6 py-4 flex items-center justify-between ${headerBg}`}>
           <div>
             <h3 className="text-white font-bold text-lg">Spot {spot.spot_number}</h3>
-            <p className="text-white/80 text-sm">Zone {spot.zone_name} · {spot.spot_type} · ₹{spot.hourly_rate}/hr</p>
+            <p className="text-white/80 text-sm">Zone {spot.zone_name} · {spot.spot_type} · ₹{spot.hourly_rate || 50}/hr</p>
           </div>
           <button onClick={onClose} className="text-white/80 hover:text-white">
             <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M18 6L6 18M6 6l12 12" /></svg>
@@ -269,9 +249,9 @@ export function SpotModal({ spot, sessions, onClose, onEntry, onExit, onOpenExte
                 {critical && !expired && <p className="text-xs text-red-600 font-bold mt-1 animate-pulse">Under 5 minutes!</p>}
                 {warning && !critical && <p className="text-xs text-amber-600 mt-1">Less than 15 minutes</p>}
                 <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-500">
-                  <div><span className="font-medium">Vehicle:</span> {booking.licensePlate}</div>
-                  <div><span className="font-medium">Booked:</span> {booking.durationHours}h</div>
-                  <div><span className="font-medium">Rate:</span> ₹{spot.hourly_rate}/hr</div>
+                  <div><span className="font-medium">Vehicle:</span> {booking.licensePlate || 'N/A'}</div>
+                  <div><span className="font-medium">Booked:</span> {booking.durationHours || 1}h</div>
+                  <div><span className="font-medium">Rate:</span> ₹{spot.hourly_rate || 50}/hr</div>
                   <div><span className="font-medium">Extended:</span> {booking.totalExtendedHours || 0}h</div>
                 </div>
               </div>
@@ -323,7 +303,7 @@ export function SpotModal({ spot, sessions, onClose, onEntry, onExit, onOpenExte
               </div>
               <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 space-y-2 border border-blue-100">
                 <div className="flex justify-between text-sm"><span className="text-slate-600">Duration</span><span className="font-semibold">{duration}h</span></div>
-                <div className="flex justify-between text-sm"><span className="text-slate-600">Rate</span><span className="font-semibold">₹{spot.hourly_rate}/hr</span></div>
+                <div className="flex justify-between text-sm"><span className="text-slate-600">Rate</span><span className="font-semibold">₹{spot.hourly_rate || 50}/hr</span></div>
                 <div className="flex justify-between text-sm"><span className="text-slate-600">Ends at</span><span className="font-semibold">{new Date(Date.now() + duration * 3600 * 1000).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span></div>
                 <div className="border-t border-blue-200 pt-2 flex justify-between"><span className="font-bold text-slate-700">Estimated Total</span><span className="font-bold text-blue-700 text-xl">₹{estimatedCost}</span></div>
               </div>
