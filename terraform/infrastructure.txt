@@ -1,0 +1,61 @@
+========================================
+Smart Parking System - Infrastructure
+========================================
+
+PROJECT OVERVIEW:
+-----------------
+Name: Smart Parking System
+Repository: https://github.com/Arulraj-2005/smart-parking-system
+Description: Full-stack parking management system with DevOps practices
+
+DEPLOYMENT URLs:
+----------------
+Frontend (Vercel):     https://smart-parking-system-pearl.vercel.app
+Backend API (Render):  https://smart-parking-api-zbno.onrender.com
+Health Check:          https://smart-parking-api-zbno.onrender.com/api/health
+
+DATABASE:
+---------
+Platform: Supabase (PostgreSQL)
+Region: ap-northeast-1 (Tokyo)
+Status: Active
+
+CI/CD PIPELINE:
+---------------
+Platform: GitHub Actions
+Trigger: Push to master/main branch
+Stages:
+  - Checkout code
+  - Setup Node.js
+  - Install dependencies
+  - Build Docker images
+  - Run containers
+  - Test API health
+  - Cleanup
+
+CONTAINERIZATION:
+----------------
+Dockerfile: Parking_frontend/Dockerfile
+Dockerfile.backend: Parking_frontend/Dockerfile.backend
+Docker Compose: docker-compose.yml
+
+INFRASTRUCTURE AS CODE:
+----------------------
+Terraform: Infrastructure documentation
+GitHub Actions: CI/CD pipeline
+Docker Compose: Container orchestration
+
+ENVIRONMENT VARIABLES:
+---------------------
+Backend (Render):
+  - PORT: 5000
+  - DB_HOST: aws-1-ap-northeast-1.pooler.supabase.com
+  - DB_PORT: 5432
+  - DB_NAME: postgres
+  - NODE_ENV: production
+  - JWT_SECRET: [configured in Render secrets]
+
+Frontend (Vercel):
+  - VITE_API_URL: https://smart-parking-api-zbno.onrender.com/api
+
+========================================
