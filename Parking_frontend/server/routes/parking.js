@@ -29,15 +29,33 @@ router.get('/zones', async (req, res) => {
 });
 
 // Get all parking spots
+// Get all parking spots with booking info
 router.get('/spots', async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT ps.*, z.name as zone_name
+      SELECT 
+        ps.*, 
+        z.name as zone_name,
+        json_build_object(
+          'endTime', pss.exit_time,
+          'licensePlate', pss.license_plate,
+          'durationHours', pss.duration_minutes / 60,
+          'totalExtendedHours', COALESCE(pss.total_extended_hours, 0),
+          'startTime', pss.entry_time
+        ) as booking
       FROM parking_spots ps
       JOIN zones z ON ps.zone_id = z.id
+      LEFT JOIN parking_sessions pss ON ps.id = pss.spot_id AND pss.payment_status = 'pending'
       ORDER BY ps.spot_number
     `);
-    res.json({ success: true, data: { spots: result.rows } });
+    
+    // Process the spots to ensure booking is null if no active session
+    const spots = result.rows.map(spot => ({
+      ...spot,
+      booking: spot.booking?.endTime ? spot.booking : null
+    }));
+    
+    res.json({ success: true, data: { spots } });
   } catch (error) {
     console.error('Get spots error:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch spots' });

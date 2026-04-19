@@ -96,6 +96,9 @@ export function ExtendModal({ spot, onClose, onExtend }) {
     return null;
   }
   
+  // ... rest of your code
+
+  
   const [extra, setExtra] = useState(1);
   const [busy, setBusy] = useState(false);
   

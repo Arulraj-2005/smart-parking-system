@@ -41,7 +41,6 @@ function MyBookingCard({ session, spot, onExtend, onCheckout }) {
       padding: '16px',
       fontFamily: "'DM Mono', 'Courier New', monospace",
     }}>
-      {/* Header row */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -68,7 +67,6 @@ function MyBookingCard({ session, spot, onExtend, onCheckout }) {
         </div>
       </div>
 
-      {/* Countdown block */}
       <div style={{
         backgroundColor: statusColor.bg,
         border: `1px solid ${statusColor.border}`,
@@ -91,7 +89,6 @@ function MyBookingCard({ session, spot, onExtend, onCheckout }) {
           {expired ? '00:00:00' : `${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`}
         </p>
 
-        {/* Progress bar — raw/utilitarian */}
         <div style={{ marginTop: '10px', height: '6px', background: '#e2e8f0', borderRadius: '0' }}>
           <div style={{
             height: '100%', width: `${usedPct}%`,
@@ -101,7 +98,6 @@ function MyBookingCard({ session, spot, onExtend, onCheckout }) {
         </div>
       </div>
 
-      {/* Actions */}
       <div style={{ display: 'flex', gap: '8px' }}>
         <button onClick={onExtend} style={{
           flex: 1, padding: '10px',
@@ -128,16 +124,68 @@ function MyBookingCard({ session, spot, onExtend, onCheckout }) {
   );
 }
 
-// ─── Checkout Modal ─────────────────────────────────────────────────────────
-function CheckoutModal({ session, spot, onConfirm, onCancel }) {
+// ─── Checkout Modal (with Razorpay) ────────────────────────────────────────
+function CheckoutModal({ session, spot, onConfirm, onCancel, user }) {
   const [busy, setBusy] = useState(false);
   const actualHours = Math.max(1, Math.ceil((Date.now() - new Date(session.entry_time).getTime()) / 3600000));
   const cost = actualHours * (spot?.hourly_rate || 50);
 
-  const handleConfirm = async () => {
+  const handlePayment = async () => {
     setBusy(true);
-    await onConfirm();
-    setBusy(false);
+    
+    try {
+      const orderRes = await apiRequest('/payment/create-order', {
+        method: 'POST',
+        body: JSON.stringify({ amount: cost, sessionId: session.id })
+      });
+      
+      if (!orderRes.success) throw new Error('Failed to create order');
+      
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.onload = () => {
+        const options = {
+          key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+          amount: orderRes.amount,
+          currency: orderRes.currency,
+          name: 'Smart Parking System',
+          description: `Parking for Spot ${session.spot_number}`,
+          order_id: orderRes.order_id,
+          handler: async (response) => {
+            const verifyRes = await apiRequest('/payment/verify', {
+              method: 'POST',
+              body: JSON.stringify({
+                order_id: response.razorpay_order_id,
+                payment_id: response.razorpay_payment_id,
+                signature: response.razorpay_signature,
+                sessionId: session.id
+              })
+            });
+            
+            if (verifyRes.success) {
+              await onConfirm();
+              setBusy(false);
+            } else {
+              throw new Error('Payment verification failed');
+            }
+          },
+          prefill: {
+            name: user?.full_name || user?.name || 'Customer',
+            email: user?.email || '',
+          },
+          theme: { color: '#3b82f6' }
+        };
+        
+        const rzp = new window.Razorpay(options);
+        rzp.open();
+      };
+      document.head.appendChild(script);
+      
+    } catch (err) {
+      console.error('Payment error:', err);
+      alert(err.message);
+      setBusy(false);
+    }
   };
 
   return (
@@ -153,7 +201,6 @@ function CheckoutModal({ session, spot, onConfirm, onCancel }) {
         border: '2px solid #0f172a',
         fontFamily: "'DM Mono', 'Courier New', monospace",
       }}>
-        {/* Header stripe */}
         <div style={{ background: '#0f172a', padding: '16px 20px' }}>
           <p style={{ color: '#f8fafc', fontSize: '11px', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '4px' }}>
             CONFIRM CHECKOUT
@@ -163,7 +210,6 @@ function CheckoutModal({ session, spot, onConfirm, onCancel }) {
           </p>
         </div>
 
-        {/* Breakdown */}
         <div style={{ padding: '20px' }}>
           <div style={{ border: '1px solid #e2e8f0', borderRadius: '4px', padding: '14px', marginBottom: '16px' }}>
             {[
@@ -197,7 +243,7 @@ function CheckoutModal({ session, spot, onConfirm, onCancel }) {
             }}>
               Cancel
             </button>
-            <button onClick={handleConfirm} disabled={busy} style={{
+            <button onClick={handlePayment} disabled={busy} style={{
               flex: 1, padding: '12px',
               background: busy ? '#94a3b8' : '#16a34a', color: '#fff',
               border: 'none', borderRadius: '4px',
@@ -259,7 +305,7 @@ export default function UserPage({ user, onLogout }) {
       const allSessions = sessionsData.sessions || sessionsData.data?.sessions || [];
       setActiveSessions(allSessions.filter(s => s.payment_status === 'pending'));
       setCompletedSessions(allSessions.filter(s => s.payment_status === 'paid'));
-    } catch {
+    } catch (err) {
       showNotif('error', 'Failed to refresh');
     } finally {
       setLoading(false);
@@ -289,15 +335,66 @@ export default function UserPage({ user, onLogout }) {
   const handleCheckout = async () => {
     if (!checkoutSession) return;
     try {
-      await apiRequest('/parking/checkout', {
+      const actualHours = Math.max(1, Math.ceil((Date.now() - new Date(checkoutSession.entry_time).getTime()) / 3600000));
+      const cost = actualHours * (checkoutSession.hourly_rate || 50);
+      
+      const orderRes = await apiRequest('/payment/create-order', {
         method: 'POST',
-        body: JSON.stringify({ sessionId: checkoutSession.id }),
+        body: JSON.stringify({ amount: cost, sessionId: checkoutSession.id })
       });
-      await fetchData();
-      setCheckoutSession(null);
-      showNotif('success', 'Checked out successfully!');
-      setActiveTab('history');
-    } catch (err) { showNotif('error', err.message); }
+      
+      if (!orderRes.success) throw new Error('Failed to create order');
+      
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.onload = () => {
+        const options = {
+          key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+          amount: orderRes.amount,
+          currency: orderRes.currency,
+          name: 'Smart Parking System',
+          description: `Parking for Spot ${checkoutSession.spot_number}`,
+          order_id: orderRes.order_id,
+          handler: async (response) => {
+            const verifyRes = await apiRequest('/payment/verify', {
+              method: 'POST',
+              body: JSON.stringify({
+                order_id: response.razorpay_order_id,
+                payment_id: response.razorpay_payment_id,
+                signature: response.razorpay_signature,
+                sessionId: checkoutSession.id
+              })
+            });
+            
+            if (verifyRes.success) {
+              await apiRequest('/parking/checkout', {
+                method: 'POST',
+                body: JSON.stringify({ sessionId: checkoutSession.id })
+              });
+              await fetchData();
+              setCheckoutSession(null);
+              showNotif('success', 'Payment successful & checked out!');
+              setActiveTab('history');
+            } else {
+              throw new Error('Payment verification failed');
+            }
+          },
+          prefill: {
+            name: user.full_name || user.name,
+            email: user.email,
+          },
+          theme: { color: '#1d4ed8' }
+        };
+        
+        const rzp = new window.Razorpay(options);
+        rzp.open();
+      };
+      document.head.appendChild(script);
+      
+    } catch (err) {
+      console.error('Checkout error:', err);
+      showNotif('error', err.message);
+    }
   };
 
   const handleExtend = async (extraHours) => {
@@ -338,7 +435,6 @@ export default function UserPage({ user, onLogout }) {
     <div style={{ minHeight: '100vh', background: '#f1f5f9', ...mono }}>
       <Toast notif={notif} />
 
-      {/* ── Header ── */}
       <header style={{
         background: '#0f172a', position: 'sticky', top: 0, zIndex: 40,
         borderBottom: '3px solid #1d4ed8',
@@ -366,7 +462,6 @@ export default function UserPage({ user, onLogout }) {
           </button>
         </div>
 
-        {/* Tab bar */}
         <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 20px', display: 'flex', gap: '0' }}>
           {TABS.map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
@@ -387,7 +482,6 @@ export default function UserPage({ user, onLogout }) {
 
       <main style={{ maxWidth: '900px', margin: '0 auto', padding: '24px 20px' }}>
 
-        {/* ── Book a Spot ── */}
         {activeTab === 'map' && (
           <div>
             <div style={{ marginBottom: '20px' }}>
@@ -470,7 +564,6 @@ export default function UserPage({ user, onLogout }) {
           </div>
         )}
 
-        {/* ── My Bookings ── */}
         {activeTab === 'mybookings' && (
           <div>
             <div style={{ marginBottom: '20px' }}>
@@ -517,7 +610,6 @@ export default function UserPage({ user, onLogout }) {
           </div>
         )}
 
-        {/* ── History ── */}
         {activeTab === 'history' && (
           <div>
             <div style={{ marginBottom: '20px' }}>
@@ -590,7 +682,6 @@ export default function UserPage({ user, onLogout }) {
         )}
       </main>
 
-      {/* ── Modals ── */}
       {selectedSpot && !selectedSpot.is_occupied && (
         <SpotModal
           spot={selectedSpot}
@@ -603,11 +694,11 @@ export default function UserPage({ user, onLogout }) {
         />
       )}
 
-      {extendSpot && (
-        <ExtendModal
-          spot={extendSpot}
-          onClose={() => setExtendSpot(null)}
-          onExtend={handleExtend}
+      {extendSpot && extendSpot.booking && (
+        <ExtendModal 
+          spot={extendSpot} 
+          onClose={() => setExtendSpot(null)} 
+          onExtend={handleExtend} 
         />
       )}
 
@@ -617,6 +708,7 @@ export default function UserPage({ user, onLogout }) {
           spot={spots.find(s => s.spot_number === checkoutSession.spot_number)}
           onConfirm={handleCheckout}
           onCancel={() => setCheckoutSession(null)}
+          user={user}
         />
       )}
 
