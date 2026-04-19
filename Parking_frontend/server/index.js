@@ -2,6 +2,12 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 
+// Add this import with other imports
+import paymentRoutes from './routes/payment.js';
+
+// Add this line after other route registrations
+app.use('/api/payment', authenticateToken, paymentRoutes);
+
 dotenv.config();
 
 console.log('🔧 Loading modules...');
