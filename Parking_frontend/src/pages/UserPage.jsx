@@ -132,20 +132,19 @@ function CheckoutModal({ session, spot, onConfirm, onCancel, user }) {
 
   const handlePayment = async () => {
     setBusy(true);
-    
     try {
       const orderRes = await apiRequest('/payment/create-order', {
         method: 'POST',
         body: JSON.stringify({ amount: cost, sessionId: session.id })
       });
-      
+
       if (!orderRes.success) throw new Error('Failed to create order');
-      
+
       const script = document.createElement('script');
       script.src = 'https://checkout.razorpay.com/v1/checkout.js';
       script.onload = () => {
         const options = {
-          key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+          key: orderRes.key_id,  // ✅ FIXED
           amount: orderRes.amount,
           currency: orderRes.currency,
           name: 'Smart Parking System',
@@ -161,7 +160,6 @@ function CheckoutModal({ session, spot, onConfirm, onCancel, user }) {
                 sessionId: session.id
               })
             });
-            
             if (verifyRes.success) {
               await onConfirm();
               setBusy(false);
@@ -175,12 +173,10 @@ function CheckoutModal({ session, spot, onConfirm, onCancel, user }) {
           },
           theme: { color: '#3b82f6' }
         };
-        
         const rzp = new window.Razorpay(options);
         rzp.open();
       };
       document.head.appendChild(script);
-      
     } catch (err) {
       console.error('Payment error:', err);
       alert(err.message);
@@ -337,19 +333,19 @@ export default function UserPage({ user, onLogout }) {
     try {
       const actualHours = Math.max(1, Math.ceil((Date.now() - new Date(checkoutSession.entry_time).getTime()) / 3600000));
       const cost = actualHours * (checkoutSession.hourly_rate || 50);
-      
+
       const orderRes = await apiRequest('/payment/create-order', {
         method: 'POST',
         body: JSON.stringify({ amount: cost, sessionId: checkoutSession.id })
       });
-      
+
       if (!orderRes.success) throw new Error('Failed to create order');
-      
+
       const script = document.createElement('script');
       script.src = 'https://checkout.razorpay.com/v1/checkout.js';
       script.onload = () => {
         const options = {
-          key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+          key: orderRes.key_id,  // ✅ FIXED
           amount: orderRes.amount,
           currency: orderRes.currency,
           name: 'Smart Parking System',
@@ -365,7 +361,6 @@ export default function UserPage({ user, onLogout }) {
                 sessionId: checkoutSession.id
               })
             });
-            
             if (verifyRes.success) {
               await apiRequest('/parking/checkout', {
                 method: 'POST',
@@ -385,12 +380,10 @@ export default function UserPage({ user, onLogout }) {
           },
           theme: { color: '#1d4ed8' }
         };
-        
         const rzp = new window.Razorpay(options);
         rzp.open();
       };
       document.head.appendChild(script);
-      
     } catch (err) {
       console.error('Checkout error:', err);
       showNotif('error', err.message);
@@ -695,10 +688,10 @@ export default function UserPage({ user, onLogout }) {
       )}
 
       {extendSpot && extendSpot.booking && (
-        <ExtendModal 
-          spot={extendSpot} 
-          onClose={() => setExtendSpot(null)} 
-          onExtend={handleExtend} 
+        <ExtendModal
+          spot={extendSpot}
+          onClose={() => setExtendSpot(null)}
+          onExtend={handleExtend}
         />
       )}
 

@@ -6,11 +6,9 @@ import pool from '../config/database.js';
 
 const router = express.Router();
 
-// Debug: Check if keys are loaded
 console.log('RAZORPAY_KEY_ID exists:', !!process.env.RAZORPAY_KEY_ID);
 console.log('RAZORPAY_KEY_SECRET exists:', !!process.env.RAZORPAY_KEY_SECRET);
 
-// Initialize Razorpay (ONCE)
 const razorpayInstance = new Razorpay({
     key_id: process.env.RAZORPAY_KEY_ID,
     key_secret: process.env.RAZORPAY_KEY_SECRET,
@@ -35,6 +33,7 @@ router.post('/create-order', authenticateToken, async (req, res) => {
             order_id: order.id,
             amount: order.amount,
             currency: order.currency,
+            key_id: process.env.RAZORPAY_KEY_ID,  // 👈 ADDED
         });
     } catch (error) {
         console.error('Razorpay order error:', error);
