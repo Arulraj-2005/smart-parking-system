@@ -6,7 +6,11 @@ import pool from '../config/database.js';
 
 const router = express.Router();
 
-// Initialize Razorpay
+// Debug: Check if keys are loaded
+console.log('RAZORPAY_KEY_ID exists:', !!process.env.RAZORPAY_KEY_ID);
+console.log('RAZORPAY_KEY_SECRET exists:', !!process.env.RAZORPAY_KEY_SECRET);
+
+// Initialize Razorpay (ONCE)
 const razorpayInstance = new Razorpay({
     key_id: process.env.RAZORPAY_KEY_ID,
     key_secret: process.env.RAZORPAY_KEY_SECRET,
@@ -18,7 +22,7 @@ router.post('/create-order', authenticateToken, async (req, res) => {
         const { amount, sessionId } = req.body;
         
         const options = {
-            amount: Math.round(amount * 100), // Convert to paise
+            amount: Math.round(amount * 100),
             currency: 'INR',
             receipt: `parking_${sessionId}_${Date.now()}`,
             payment_capture: 1,
@@ -50,7 +54,6 @@ router.post('/verify', authenticateToken, async (req, res) => {
             .digest("hex");
         
         if (expectedSignature === signature) {
-            // Payment verified - update parking session
             await pool.query(
                 `UPDATE parking_sessions 
                  SET payment_status = 'paid', payment_method = 'razorpay'

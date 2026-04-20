@@ -10,6 +10,12 @@ dotenv.config({ path: path.join(__dirname, '.env') });
 
 import express from 'express';
 import cors from 'cors';
+<<<<<<< HEAD
+=======
+import dotenv from 'dotenv';
+
+dotenv.config();
+>>>>>>> 83ca3e62d2e45ac5ed7bf6adbd5938450b579278
 
 console.log('🔧 Loading modules...');
 
@@ -79,6 +85,10 @@ try {
   process.exit(1);
 }
 
+<<<<<<< HEAD
+=======
+// ✅ CREATE APP HERE - AFTER all imports
+>>>>>>> 83ca3e62d2e45ac5ed7bf6adbd5938450b579278
 const app = express();
 const PORT = process.env.PORT || 5000;
 
