@@ -1,19 +1,20 @@
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load .env from the server folder
+dotenv.config({ path: path.join(__dirname, '.env') });
+
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
-
-// Add this import with other imports
-import paymentRoutes from './routes/payment.js';
-
-// Add this line after other route registrations
-app.use('/api/payment', authenticateToken, paymentRoutes);
-
-dotenv.config();
 
 console.log('🔧 Loading modules...');
 
 // Import routes
-let authRoutes, parkingRoutes, vehicleRoutes, analyticsRoutes, authenticateToken, adminRoutes;
+let authRoutes, parkingRoutes, vehicleRoutes, analyticsRoutes, authenticateToken, adminRoutes, paymentRoutes;
 
 try {
   const authModule = await import('./routes/auth.js');
@@ -69,21 +70,34 @@ try {
   process.exit(1);
 }
 
-// ✅ CREATE APP HERE - AFTER all imports
+try {
+  const paymentModule = await import('./routes/payment.js');
+  paymentRoutes = paymentModule.default;
+  console.log('✅ Payment routes loaded');
+} catch (err) {
+  console.error('❌ Failed to load payment routes:', err.message);
+  process.exit(1);
+}
+
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// Debug: Log environment variables (remove after debugging)
+console.log('DB_HOST from env:', process.env.DB_HOST);
+console.log('RAZORPAY_KEY_ID exists:', !!process.env.RAZORPAY_KEY_ID);
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Routes - THESE MUST COME AFTER app is created
+// Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/parking', authenticateToken, parkingRoutes);
 app.use('/api/vehicles', authenticateToken, vehicleRoutes);
 app.use('/api/analytics', authenticateToken, analyticsRoutes);
-app.use('/api/admin', authenticateToken, adminRoutes);  // ✅ This line must be AFTER const app = express()
+app.use('/api/admin', authenticateToken, adminRoutes);
+app.use('/api/payment', authenticateToken, paymentRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
