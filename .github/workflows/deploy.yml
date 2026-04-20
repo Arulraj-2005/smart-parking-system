@@ -36,12 +36,14 @@ jobs:
       run: sudo apt-get update && sudo apt-get install -y docker-compose
     
     - name: Build and Run Containers
+      env:
+        RAZORPAY_KEY_ID: ${{ secrets.RAZORPAY_KEY_ID }}         # 👈 ADDED
+        RAZORPAY_KEY_SECRET: ${{ secrets.RAZORPAY_KEY_SECRET }}  # 👈 ADDED
       run: |
         docker-compose up -d
-        sleep 10
+        sleep 15
         docker-compose ps
         docker-compose logs backend
-        docker-compose logs postgres
         curl http://localhost:5000/api/health || echo "Health check failed"
     
     - name: Cleanup
@@ -50,8 +52,8 @@ jobs:
 
   push-to-ecr:
     runs-on: ubuntu-latest
-    needs: test                          # only runs if test job passes
-    if: github.ref == 'refs/heads/master' && github.event_name == 'push'  # skip on PRs
+    needs: test
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
 
     steps:
     - uses: actions/checkout@v4

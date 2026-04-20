@@ -6,9 +6,6 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: smart_parking
-    # REMOVE this ports section completely:
-    # ports:
-    #   - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./Parking_frontend/server/config/schema.sql:/docker-entrypoint-initdb.d/1-schema.sql
@@ -34,6 +31,8 @@ services:
       DB_PASSWORD: postgres
       DB_NAME: smart_parking
       JWT_SECRET: test_secret_key_for_ci
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}         # 👈 ADDED
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET}  # 👈 ADDED
     ports:
       - "5000:5000"
     depends_on:
