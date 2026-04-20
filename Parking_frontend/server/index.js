@@ -1,21 +1,8 @@
 import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Load .env from the server folder
-dotenv.config({ path: path.join(__dirname, '.env') });
+dotenv.config();
 
 import express from 'express';
 import cors from 'cors';
-<<<<<<< HEAD
-=======
-import dotenv from 'dotenv';
-
-dotenv.config();
->>>>>>> 83ca3e62d2e45ac5ed7bf6adbd5938450b579278
 
 console.log('🔧 Loading modules...');
 
@@ -85,14 +72,10 @@ try {
   process.exit(1);
 }
 
-<<<<<<< HEAD
-=======
-// ✅ CREATE APP HERE - AFTER all imports
->>>>>>> 83ca3e62d2e45ac5ed7bf6adbd5938450b579278
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Debug: Log environment variables (remove after debugging)
+// Debug: Log environment variables
 console.log('DB_HOST from env:', process.env.DB_HOST);
 console.log('RAZORPAY_KEY_ID exists:', !!process.env.RAZORPAY_KEY_ID);
 
