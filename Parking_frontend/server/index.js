@@ -2,18 +2,12 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 
-// Add this import with other imports
-import paymentRoutes from './routes/payment.js';
-
-// Add this line after other route registrations
-app.use('/api/payment', authenticateToken, paymentRoutes);
-
 dotenv.config();
 
 console.log('🔧 Loading modules...');
 
 // Import routes
-let authRoutes, parkingRoutes, vehicleRoutes, analyticsRoutes, authenticateToken, adminRoutes;
+let authRoutes, parkingRoutes, vehicleRoutes, analyticsRoutes, authenticateToken, adminRoutes, paymentRoutes;
 
 try {
   const authModule = await import('./routes/auth.js');
@@ -69,6 +63,15 @@ try {
   process.exit(1);
 }
 
+try {
+  const paymentModule = await import('./routes/payment.js');
+  paymentRoutes = paymentModule.default;
+  console.log('✅ Payment routes loaded');
+} catch (err) {
+  console.error('❌ Failed to load payment routes:', err.message);
+  process.exit(1);
+}
+
 // ✅ CREATE APP HERE - AFTER all imports
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -83,7 +86,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/parking', authenticateToken, parkingRoutes);
 app.use('/api/vehicles', authenticateToken, vehicleRoutes);
 app.use('/api/analytics', authenticateToken, analyticsRoutes);
-app.use('/api/admin', authenticateToken, adminRoutes);  // ✅ This line must be AFTER const app = express()
+app.use('/api/admin', authenticateToken, adminRoutes);
+app.use('/api/payment', authenticateToken, paymentRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
