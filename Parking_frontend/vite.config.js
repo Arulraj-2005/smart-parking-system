@@ -11,7 +11,7 @@ const __dirname = path.dirname(__filename);
 export default defineConfig({
   // This is the critical setting for GitHub Pages.
   // It tells Vite to prefix all asset URLs with your repository name.
-  base: '/smart-parking-system/',
+  base: '/',
   plugins: [
     react(),
     tailwindcss(),
