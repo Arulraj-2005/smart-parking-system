@@ -124,65 +124,10 @@ function MyBookingCard({ session, spot, onExtend, onCheckout }) {
   );
 }
 
-// ─── Checkout Modal (with Razorpay) ────────────────────────────────────────
-function CheckoutModal({ session, spot, onConfirm, onCancel, user }) {
-  const [busy, setBusy] = useState(false);
+// ─── Simplified Checkout Modal (No Razorpay inside) ─────────────────────────
+function CheckoutModal({ session, spot, onConfirm, onCancel }) {
   const actualHours = Math.max(1, Math.ceil((Date.now() - new Date(session.entry_time).getTime()) / 3600000));
   const cost = actualHours * (spot?.hourly_rate || 50);
-
-  const handlePayment = async () => {
-    setBusy(true);
-    try {
-      const orderRes = await apiRequest('/payment/create-order', {
-        method: 'POST',
-        body: JSON.stringify({ amount: cost, sessionId: session.id })
-      });
-
-      if (!orderRes.success) throw new Error('Failed to create order');
-
-      const script = document.createElement('script');
-      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-      script.onload = () => {
-        const options = {
-          key: orderRes.key_id,
-          amount: orderRes.amount,
-          currency: orderRes.currency,
-          name: 'Smart Parking System',
-          description: `Parking for Spot ${session.spot_number}`,
-          order_id: orderRes.order_id,
-          handler: async (response) => {
-            const verifyRes = await apiRequest('/payment/verify', {
-              method: 'POST',
-              body: JSON.stringify({
-                order_id: response.razorpay_order_id,
-                payment_id: response.razorpay_payment_id,
-                signature: response.razorpay_signature,
-                sessionId: session.id
-              })
-            });
-            if (verifyRes.success) {
-              await onConfirm();
-              setBusy(false);
-            } else {
-              throw new Error('Payment verification failed');
-            }
-          },
-          prefill: {
-            name: user?.full_name || user?.name || 'Customer',
-            email: user?.email || '',
-          },
-          theme: { color: '#3b82f6' }
-        };
-        const rzp = new window.Razorpay(options);
-        rzp.open();
-      };
-      document.head.appendChild(script);
-    } catch (err) {
-      console.error('Payment error:', err);
-      alert(err.message);
-      setBusy(false);
-    }
-  };
 
   return (
     <div style={{
@@ -239,14 +184,14 @@ function CheckoutModal({ session, spot, onConfirm, onCancel, user }) {
             }}>
               Cancel
             </button>
-            <button onClick={handlePayment} disabled={busy} style={{
+            <button onClick={onConfirm} style={{
               flex: 1, padding: '12px',
-              background: busy ? '#94a3b8' : '#16a34a', color: '#fff',
+              background: '#16a34a', color: '#fff',
               border: 'none', borderRadius: '4px',
-              fontSize: '13px', fontWeight: 700, cursor: busy ? 'not-allowed' : 'pointer',
+              fontSize: '13px', fontWeight: 700, cursor: 'pointer',
               textTransform: 'uppercase', letterSpacing: '0.5px',
             }}>
-              {busy ? 'Processing…' : `Pay ₹${cost}`}
+              Pay ₹{cost}
             </button>
           </div>
         </div>
@@ -343,6 +288,7 @@ export default function UserPage({ user, onLogout }) {
 
       const script = document.createElement('script');
       script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      
       script.onload = () => {
         const options = {
           key: orderRes.key_id,
@@ -361,6 +307,7 @@ export default function UserPage({ user, onLogout }) {
                 sessionId: checkoutSession.id
               })
             });
+            
             if (verifyRes.success) {
               await apiRequest('/parking/checkout', {
                 method: 'POST',
@@ -374,15 +321,22 @@ export default function UserPage({ user, onLogout }) {
               throw new Error('Payment verification failed');
             }
           },
+          modal: {
+            ondismiss: () => {
+              // User closed the modal - do nothing
+            }
+          },
           prefill: {
             name: user.full_name || user.name,
             email: user.email,
           },
           theme: { color: '#1d4ed8' }
         };
+        
         const rzp = new window.Razorpay(options);
         rzp.open();
       };
+      
       document.head.appendChild(script);
     } catch (err) {
       console.error('Checkout error:', err);
@@ -576,7 +530,6 @@ export default function UserPage({ user, onLogout }) {
                       session={session}
                       spot={spot}
                       onExtend={() => {
-                        // Create booking data from session data
                         const spotWithBooking = {
                           ...spot,
                           booking: {
@@ -714,7 +667,6 @@ export default function UserPage({ user, onLogout }) {
           spot={spots.find(s => s.spot_number === checkoutSession.spot_number)}
           onConfirm={handleCheckout}
           onCancel={() => setCheckoutSession(null)}
-          user={user}
         />
       )}
 
