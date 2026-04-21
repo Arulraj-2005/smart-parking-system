@@ -124,7 +124,7 @@ function MyBookingCard({ session, spot, onExtend, onCheckout }) {
   );
 }
 
-// ─── Simplified Checkout Modal (No Razorpay inside) ─────────────────────────
+// ─── Simplified Checkout Modal ──────────────────────────────────────────────
 function CheckoutModal({ session, spot, onConfirm, onCancel }) {
   const actualHours = Math.max(1, Math.ceil((Date.now() - new Date(session.entry_time).getTime()) / 3600000));
   const cost = actualHours * (spot?.hourly_rate || 50);
@@ -236,17 +236,24 @@ export default function UserPage({ user, onLogout }) {
 
   const fetchData = useCallback(async () => {
     try {
+      console.log('🔄 Fetching fresh data...');
+      
       const [spotsData, zonesData, sessionsData] = await Promise.all([
         apiRequest('/parking/spots'),
         apiRequest('/parking/zones'),
         apiRequest('/parking/sessions/my'),
       ]);
+      
       setSpots(spotsData.data?.spots || []);
       setZones(zonesData.data?.zones || []);
+      
       const allSessions = sessionsData.sessions || sessionsData.data?.sessions || [];
       setActiveSessions(allSessions.filter(s => s.payment_status === 'pending'));
       setCompletedSessions(allSessions.filter(s => s.payment_status === 'paid'));
+      
+      console.log('✅ Data refreshed. Spots:', spotsData.data?.spots?.length);
     } catch (err) {
+      console.error('❌ Fetch error:', err);
       showNotif('error', 'Failed to refresh');
     } finally {
       setLoading(false);
@@ -309,22 +316,22 @@ export default function UserPage({ user, onLogout }) {
             });
             
             if (verifyRes.success) {
+              console.log('✅ Payment verified, completing checkout...');
               await apiRequest('/parking/checkout', {
                 method: 'POST',
                 body: JSON.stringify({ sessionId: checkoutSession.id })
               });
+              console.log('🔄 Refreshing data...');
               await fetchData();
               setCheckoutSession(null);
-              showNotif('success', 'Payment successful & checked out!');
-              setActiveTab('history');
+              showNotif('success', 'Payment successful! Spot is now available.');
+              setActiveTab('map');
             } else {
               throw new Error('Payment verification failed');
             }
           },
           modal: {
-            ondismiss: () => {
-              // User closed the modal - do nothing
-            }
+            ondismiss: () => {}
           },
           prefill: {
             name: user.full_name || user.name,
@@ -339,7 +346,7 @@ export default function UserPage({ user, onLogout }) {
       
       document.head.appendChild(script);
     } catch (err) {
-      console.error('Checkout error:', err);
+      console.error('❌ Checkout error:', err);
       showNotif('error', err.message);
     }
   };
@@ -431,9 +438,26 @@ export default function UserPage({ user, onLogout }) {
 
         {activeTab === 'map' && (
           <div>
-            <div style={{ marginBottom: '20px' }}>
-              <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.5px' }}>Find & Book a Spot</h2>
-              <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px', letterSpacing: '0.5px' }}>Select any available slot below</p>
+            <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.5px' }}>Find & Book a Spot</h2>
+                <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px', letterSpacing: '0.5px' }}>Select any available slot below</p>
+              </div>
+              <button 
+                onClick={() => fetchData()} 
+                style={{
+                  padding: '8px 16px',
+                  background: '#1d4ed8',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit'
+                }}
+              >
+                🔄 Refresh Map
+              </button>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '24px' }}>
