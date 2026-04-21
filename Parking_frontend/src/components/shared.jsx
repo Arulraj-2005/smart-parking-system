@@ -90,11 +90,24 @@ export function Toast({ notif }) {
 
 // ─── Extend Booking Modal ──────────────────────────────────────────────────────
 export function ExtendModal({ spot, onClose, onExtend }) {
-  // Safety check - prevent white screen if booking data is missing
+  // Safety check - prevent crash if booking data is missing
   if (!spot || !spot.booking || !spot.booking.endTime) {
     console.warn('ExtendModal: Missing booking data', spot);
-    return null;
+    // Try to create booking data from session
+    if (spot && spot.end_time) {
+      spot.booking = {
+        endTime: spot.end_time,
+        licensePlate: spot.license_plate,
+        durationHours: spot.duration_hours,
+        startTime: spot.entry_time
+      };
+    } else {
+      return null;
+    }
   }
+  
+  // ... rest of your existing code
+
   
   // ... rest of your code
 
