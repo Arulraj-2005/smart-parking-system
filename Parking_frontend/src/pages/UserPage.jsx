@@ -144,7 +144,7 @@ function CheckoutModal({ session, spot, onConfirm, onCancel, user }) {
       script.src = 'https://checkout.razorpay.com/v1/checkout.js';
       script.onload = () => {
         const options = {
-          key: orderRes.key_id,  // ✅ FIXED
+          key: orderRes.key_id,
           amount: orderRes.amount,
           currency: orderRes.currency,
           name: 'Smart Parking System',
@@ -345,7 +345,7 @@ export default function UserPage({ user, onLogout }) {
       script.src = 'https://checkout.razorpay.com/v1/checkout.js';
       script.onload = () => {
         const options = {
-          key: orderRes.key_id,  // ✅ FIXED
+          key: orderRes.key_id,
           amount: orderRes.amount,
           currency: orderRes.currency,
           name: 'Smart Parking System',
@@ -575,7 +575,20 @@ export default function UserPage({ user, onLogout }) {
                       key={session.id}
                       session={session}
                       spot={spot}
-                      onExtend={() => setExtendSpot(spot)}
+                      onExtend={() => {
+                        // Create booking data from session data
+                        const spotWithBooking = {
+                          ...spot,
+                          booking: {
+                            endTime: session.end_time,
+                            licensePlate: session.license_plate,
+                            durationHours: session.duration_hours,
+                            startTime: session.entry_time,
+                            totalExtendedHours: session.total_extended_hours || 0
+                          }
+                        };
+                        setExtendSpot(spotWithBooking);
+                      }}
                       onCheckout={() => setCheckoutSession(session)}
                     />
                   );
@@ -687,7 +700,7 @@ export default function UserPage({ user, onLogout }) {
         />
       )}
 
-      {extendSpot && extendSpot.booking && (
+      {extendSpot && (
         <ExtendModal
           spot={extendSpot}
           onClose={() => setExtendSpot(null)}
