@@ -139,7 +139,7 @@ export default function AdminPage({ user, onLogout }) {
 
   const handleExit = async () => {
     if (!selectedSpot) return;
-    const session = sessions.find(s => s.spot_number === selectedSpot.spot_number && s.duration_minutes === 0);
+    const session = sessions.find(s => s.spot_number === selectedSpot.spot_number && s.payment_status === 'pending');
     if (!session) {
       showNotif('error', 'No active session');
       return;
@@ -197,8 +197,8 @@ export default function AdminPage({ user, onLogout }) {
     }
   };
 
-  const activeSessions = sessions.filter(s => s.duration_minutes === 0);
-  const completedSessions = allSessions.filter(s => s.duration_minutes > 0);
+  const activeSessions = sessions.filter(s => s.payment_status === 'pending');
+  const completedSessions = allSessions.filter(s => s.payment_status === 'paid');
   const criticalCount = spots.filter(s => s.booking && !s.booking.expired && new Date(s.booking.endTime).getTime() - Date.now() < 5 * 60 * 1000).length;
   const warningCount = spots.filter(s => s.booking && !s.booking.expired && new Date(s.booking.endTime).getTime() - Date.now() < 15 * 60 * 1000).length;
 
@@ -516,98 +516,105 @@ export default function AdminPage({ user, onLogout }) {
         )}
 
         {/* Analytics Tab */}
-        {activeTab === 'analytics' && stats && (
+        {activeTab === 'analytics' && (
           <div className="space-y-6">
             <div><h2 className="text-2xl font-bold text-slate-900">Analytics & Reports</h2></div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Donut */}
-              <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col items-center">
-                <h3 className="font-semibold text-slate-900 mb-4 self-start">Occupancy Rate</h3>
-                <div className="relative w-48 h-48">
-                  <svg className="w-full h-full -rotate-90" viewBox="0 0 200 200">
-                    <circle cx="100" cy="100" r="80" stroke="#e2e8f0" strokeWidth="28" fill="none" />
-                    <circle cx="100" cy="100" r="80" stroke="#3b82f6" strokeWidth="28" fill="none"
-                      strokeDasharray={`${(stats.occupancyRate / 100) * 502} 502`} strokeLinecap="round" />
-                  </svg>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <p className="text-3xl font-bold text-slate-900">{stats.occupancyRate}%</p>
-                    <p className="text-xs text-slate-500">Occupied</p>
-                  </div>
-                </div>
-                <div className="mt-4 grid grid-cols-3 gap-4 w-full text-center text-sm">
-                  <div><p className="text-2xl font-bold text-green-600">{stats.availableSpots}</p><p className="text-slate-500 text-xs">Free</p></div>
-                  <div><p className="text-2xl font-bold text-red-500">{stats.occupiedSpots}</p><p className="text-slate-500 text-xs">Occupied</p></div>
-                  <div><p className="text-2xl font-bold text-orange-500">{stats.reservedSpots}</p><p className="text-slate-500 text-xs">Reserved</p></div>
-                </div>
+            {!stats ? (
+              <div className="bg-white rounded-2xl p-12 text-center border border-slate-100 text-slate-400">
+                Loading analytics data...
               </div>
-
-              {/* Zone bars */}
-              <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-                <h3 className="font-semibold text-slate-900 mb-4">Zone Occupancy</h3>
-                <div className="space-y-4">
-                  {zones.map(z => (
-                    <div key={z.id}>
-                      <div className="flex justify-between text-sm mb-1"><span className="font-medium text-slate-700">Zone {z.name}</span><span className="font-bold">{z.occupied_spots}/{z.total_spots}</span></div>
-                      <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all" style={{ width: `${(z.occupied_spots / z.total_spots) * 100}%` }} />
-                      </div>
-                      <p className="text-xs text-slate-400 mt-0.5">{Math.round((z.occupied_spots / z.total_spots) * 100)}% full</p>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Donut */}
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col items-center">
+                  <h3 className="font-semibold text-slate-900 mb-4 self-start">Occupancy Rate</h3>
+                  <div className="relative w-48 h-48">
+                    <svg className="w-full h-full -rotate-90" viewBox="0 0 200 200">
+                      <circle cx="100" cy="100" r="80" stroke="#e2e8f0" strokeWidth="28" fill="none" />
+                      <circle cx="100" cy="100" r="80" stroke="#3b82f6" strokeWidth="28" fill="none"
+                        strokeDasharray={`${(stats.occupancyRate / 100) * 502} 502`} strokeLinecap="round" />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <p className="text-3xl font-bold text-slate-900">{stats.occupancyRate}%</p>
+                      <p className="text-xs text-slate-500">Occupied</p>
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Revenue summary */}
-              <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-                <h3 className="font-semibold text-slate-900 mb-4">Revenue Summary</h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center bg-green-50 rounded-xl p-3">
-                    <span className="text-slate-600 text-sm">Completed Sessions</span>
-                    <span className="font-bold text-green-700">${completedSessions.reduce((s, x) => s + (x.total_amount || 0), 0).toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between items-center bg-blue-50 rounded-xl p-3">
-                    <span className="text-slate-600 text-sm">Active Sessions (est.)</span>
-                    <span className="font-bold text-blue-700">${activeSessions.reduce((s, sess) => {
-                      const mins = (Date.now() - new Date(sess.entry_time).getTime()) / 60000;
-                      return s + (mins / 60) * 5;
-                    }, 0).toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between items-center bg-slate-100 rounded-xl p-3 border-t border-slate-200">
-                    <span className="font-bold text-slate-700">Total Revenue</span>
-                    <span className="font-bold text-slate-900 text-lg">${stats.todayRevenue.toFixed(2)}</span>
+                  <div className="mt-4 grid grid-cols-3 gap-4 w-full text-center text-sm">
+                    <div><p className="text-2xl font-bold text-green-600">{stats.availableSpots}</p><p className="text-slate-500 text-xs">Free</p></div>
+                    <div><p className="text-2xl font-bold text-red-500">{stats.occupiedSpots}</p><p className="text-slate-500 text-xs">Occupied</p></div>
+                    <div><p className="text-2xl font-bold text-orange-500">{stats.reservedSpots}</p><p className="text-slate-500 text-xs">Reserved</p></div>
                   </div>
                 </div>
-              </div>
 
-              {/* Spot type */}
-              <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-                <h3 className="font-semibold text-slate-900 mb-4">Spot Type Summary</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  {['regular', 'electric', 'motorcycle', 'handicapped'].map(type => {
-                    const typeSpots = spots.filter(s => s.spot_type === type);
-                    const occupied = typeSpots.filter(s => s.is_occupied).length;
-                    const pct = typeSpots.length > 0 ? Math.round((occupied / typeSpots.length) * 100) : 0;
-                    const cm = {
-                      regular: { bg: 'bg-blue-50', text: 'text-blue-700', bar: 'bg-blue-500' },
-                      electric: { bg: 'bg-emerald-50', text: 'text-emerald-700', bar: 'bg-emerald-500' },
-                      motorcycle: { bg: 'bg-purple-50', text: 'text-purple-700', bar: 'bg-purple-500' },
-                      handicapped: { bg: 'bg-amber-50', text: 'text-amber-700', bar: 'bg-amber-500' },
-                    };
-                    const c = cm[type];
-                    return (
-                      <div key={type} className={`rounded-xl p-4 ${c.bg}`}>
-                        <p className="text-xs text-slate-500 capitalize mb-1">{type}</p>
-                        <p className={`text-2xl font-bold ${c.text}`}>{occupied}/{typeSpots.length}</p>
-                        <div className="h-1.5 bg-white/60 rounded-full mt-2 overflow-hidden"><div className={`h-full ${c.bar} rounded-full`} style={{ width: `${pct}%` }} /></div>
-                        <p className="text-xs text-slate-400 mt-1">{pct}% occupied</p>
+                {/* Zone bars */}
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+                  <h3 className="font-semibold text-slate-900 mb-4">Zone Occupancy</h3>
+                  <div className="space-y-4">
+                    {zones.map(z => (
+                      <div key={z.id}>
+                        <div className="flex justify-between text-sm mb-1"><span className="font-medium text-slate-700">Zone {z.name}</span><span className="font-bold">{z.occupied_spots}/{z.total_spots}</span></div>
+                        <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all" style={{ width: `${(z.occupied_spots / z.total_spots) * 100}%` }} />
+                        </div>
+                        <p className="text-xs text-slate-400 mt-0.5">{Math.round((z.occupied_spots / z.total_spots) * 100)}% full</p>
                       </div>
-                    );
-                  })}
+                    ))}
+                  </div>
+                </div>
+
+                {/* Revenue summary */}
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+                  <h3 className="font-semibold text-slate-900 mb-4">Revenue Summary</h3>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center bg-green-50 rounded-xl p-3">
+                      <span className="text-slate-600 text-sm">Completed Sessions</span>
+                      <span className="font-bold text-green-700">₹{completedSessions.reduce((s, x) => s + (x.total_amount || 0), 0).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between items-center bg-blue-50 rounded-xl p-3">
+                      <span className="text-slate-600 text-sm">Active Sessions (est.)</span>
+                      <span className="font-bold text-blue-700">₹{activeSessions.reduce((s, sess) => {
+                        const hrs = (Date.now() - new Date(sess.entry_time).getTime()) / 3600000;
+                        return s + hrs * (sess.hourly_rate || 50);
+                      }, 0).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between items-center bg-slate-100 rounded-xl p-3 border-t border-slate-200">
+                      <span className="font-bold text-slate-700">Today's Revenue</span>
+                      <span className="font-bold text-slate-900 text-lg">₹{stats.todayRevenue.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Spot type */}
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+                  <h3 className="font-semibold text-slate-900 mb-4">Spot Type Summary</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    {['regular', 'electric', 'motorcycle', 'handicapped'].map(type => {
+                      const typeSpots = spots.filter(s => s.spot_type === type);
+                      const occupied = typeSpots.filter(s => s.is_occupied).length;
+                      const pct = typeSpots.length > 0 ? Math.round((occupied / typeSpots.length) * 100) : 0;
+                      const cm = {
+                        regular: { bg: 'bg-blue-50', text: 'text-blue-700', bar: 'bg-blue-500' },
+                        electric: { bg: 'bg-emerald-50', text: 'text-emerald-700', bar: 'bg-emerald-500' },
+                        motorcycle: { bg: 'bg-purple-50', text: 'text-purple-700', bar: 'bg-purple-500' },
+                        handicapped: { bg: 'bg-amber-50', text: 'text-amber-700', bar: 'bg-amber-500' },
+                      };
+                      const c = cm[type];
+                      return (
+                        <div key={type} className={`rounded-xl p-4 ${c.bg}`}>
+                          <p className="text-xs text-slate-500 capitalize mb-1">{type}</p>
+                          <p className={`text-2xl font-bold ${c.text}`}>{occupied}/{typeSpots.length}</p>
+                          <div className="h-1.5 bg-white/60 rounded-full mt-2 overflow-hidden"><div className={`h-full ${c.bar} rounded-full`} style={{ width: `${pct}%` }} /></div>
+                          <p className="text-xs text-slate-400 mt-1">{pct}% occupied</p>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         )}
+
       </main>
 
       {selectedSpot && (
