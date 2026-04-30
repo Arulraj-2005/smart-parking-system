@@ -53,13 +53,40 @@ router.post('/verify', authenticateToken, async (req, res) => {
             .digest("hex");
         
         if (expectedSignature === signature) {
-            await pool.query(
-                `UPDATE parking_sessions 
-                 SET payment_status = 'paid', payment_method = 'razorpay'
-                 WHERE id = $1`,
+            // Fetch session + hourly_rate to compute total_amount
+            const sessionRes = await pool.query(
+                `SELECT ps.entry_time, psp.hourly_rate
+                 FROM parking_sessions ps
+                 JOIN parking_spots psp ON ps.spot_id = psp.id
+                 WHERE ps.id = $1`,
                 [sessionId]
             );
+            let totalAmount = null;
+            if (sessionRes.rows.length > 0) {
+                const { entry_time, hourly_rate } = sessionRes.rows[0];
+                const durationMs = Date.now() - new Date(entry_time).getTime();
+                const durationHours = Math.max(1, Math.ceil(durationMs / 3600000));
+                totalAmount = durationHours * parseFloat(hourly_rate);
+            }
+
+            await pool.query(
+                `UPDATE parking_sessions 
+                 SET payment_status = 'paid', payment_method = 'razorpay',
+                     total_amount = COALESCE($2, total_amount),
+                     exit_time = COALESCE(exit_time, NOW()),
+                     duration_minutes = COALESCE(duration_minutes,
+                         EXTRACT(EPOCH FROM (NOW() - entry_time))::int / 60)
+                 WHERE id = $1`,
+                [sessionId, totalAmount]
+            );
             
+            // Always free the parking spot so the map updates immediately
+            await pool.query(
+                `UPDATE parking_spots SET is_occupied = false
+                 WHERE id = (SELECT spot_id FROM parking_sessions WHERE id = $1)`,
+                [sessionId]
+            );
+
             res.json({ success: true, message: "Payment verified successfully!" });
         } else {
             res.status(400).json({ success: false, message: "Invalid signature" });
