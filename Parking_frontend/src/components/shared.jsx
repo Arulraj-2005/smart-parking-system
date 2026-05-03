@@ -60,8 +60,9 @@ export function CountdownBadge({ endTime }) {
 // ─── Spot Color Util ───────────────────────────────────────────────────────────
 export function getSpotColor(spot) {
   if (spot.is_occupied) {
-    if (spot.booking) {
-      const remaining = new Date(spot.booking.endTime).getTime() - Date.now();
+    const endTime = spot.booking?.endTime || spot.end_time || null;
+    if (endTime) {
+      const remaining = new Date(endTime).getTime() - Date.now();
       if (remaining <= 0) return 'bg-red-900 ring-2 ring-red-400';
       if (remaining < 5 * 60 * 1000) return 'bg-red-600 ring-2 ring-red-300 animate-pulse';
       if (remaining < 15 * 60 * 1000) return 'bg-amber-500 ring-2 ring-amber-300';
@@ -229,11 +230,11 @@ export function SpotModal({ spot, sessions, onClose, onEntry, onExit, onOpenExte
   const [duration, setDuration] = useState(1);
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState('checkout');
-  const session = sessions.find(s => s.spot_number === spot.spot_number && s.duration_minutes === 0);
+  const session = sessions.find(s => s.spot_number === spot.spot_number && s.payment_status === 'pending');
   const booking = spot.booking;
   const { hours, minutes, seconds, expired, critical, warning } = useCountdown(booking?.endTime ?? null);
   const estimatedCost = duration * (spot.hourly_rate || 50);
-  const actualCost = session ? Math.ceil((Date.now() - new Date(session.entry_time).getTime()) / 3600000) * (spot.hourly_rate || 50) : 0;
+  const actualCost = session?.entry_time ? Math.ceil((Date.now() - new Date(session.entry_time).getTime()) / 3600000) * (Number(spot.hourly_rate) || 50) : 0;
   const headerBg = spot.is_occupied ? (expired ? 'bg-red-800' : critical ? 'bg-red-600' : warning ? 'bg-amber-500' : 'bg-red-500') : 'bg-gradient-to-r from-blue-600 to-indigo-700';
 
   const doEntry = async () => { if (!plate) return; setBusy(true); await onEntry(plate.toUpperCase(), duration); setBusy(false); };
@@ -358,10 +359,10 @@ export function BookingTimerRow({ session, spots, onExtend, showExtend = true })
           </span>
         )}
       </td>
-      <td className="py-3 px-4 text-sm text-slate-600">₹{(spot?.hourly_rate || 50) * session.duration_hours}</td>
+      <td className="py-3 px-4 text-sm text-slate-600">₹{((spot?.hourly_rate || 50) * Number(session.duration_hours)).toFixed(0)}</td>
       {showExtend && (
         <td className="py-3 px-4">
-          <button onClick={() => spot && onExtend(spot)} disabled={!spot || !spot.booking}
+          <button onClick={() => spot && onExtend(spot)} disabled={!spot}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-40 shadow-sm">
             Extend
           </button>
