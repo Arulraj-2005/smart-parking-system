@@ -26,9 +26,9 @@ function CompletedRow({ session }) {
       <td className="py-2.5 px-4 text-sm font-mono font-bold text-slate-700">{session.license_plate}</td>
       <td className="py-2.5 px-4 text-sm text-slate-600">{session.spot_number}</td>
       <td className="py-2.5 px-4 text-sm text-slate-600">Zone {session.zone_name}</td>
-      <td className="py-2.5 px-4 text-sm text-slate-600">{session.duration_hours}h</td>
+      <td className="py-2.5 px-4 text-sm text-slate-600">{Number(session.duration_hours || 0).toFixed(1)}h</td>
       <td className="py-2.5 px-4 text-sm text-slate-600">{fmtDateTime(session.entry_time)}</td>
-      <td className="py-2.5 px-4 text-sm font-bold text-green-700">${session.total_amount?.toFixed(2) || (session.duration_hours * 5).toFixed(2)}</td>
+      <td className="py-2.5 px-4 text-sm font-bold text-green-700">₹{Number(session.total_amount || 0).toFixed(2)}</td>
       <td className="py-2.5 px-4">
         <span className="text-xs bg-green-100 text-green-700 rounded-full px-2 py-1 font-semibold">Completed</span>
       </td>
@@ -350,7 +350,19 @@ export default function AdminPage({ user, onLogout }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {activeSessions.map(s => <BookingTimerRow key={s.id} session={s} spots={spots} onExtend={spot => setExtendSpot(spot)} />)}
+                      {activeSessions.map(s => <BookingTimerRow key={s.id} session={s} spots={spots} onExtend={spot => {
+                          const enriched = {
+                            ...spot,
+                            booking: {
+                              endTime: s.end_time,
+                              licensePlate: s.license_plate,
+                              durationHours: Number(s.duration_hours) || 1,
+                              startTime: s.entry_time,
+                              totalExtendedHours: s.total_extended_hours || 0,
+                            }
+                          };
+                          setExtendSpot(enriched);
+                        }} />)}
                     </tbody>
                   </table>
                 </div>
@@ -431,7 +443,19 @@ export default function AdminPage({ user, onLogout }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {activeSessions.map(s => <BookingTimerRow key={s.id} session={s} spots={spots} onExtend={spot => setExtendSpot(spot)} />)}
+                      {activeSessions.map(s => <BookingTimerRow key={s.id} session={s} spots={spots} onExtend={spot => {
+                          const enriched = {
+                            ...spot,
+                            booking: {
+                              endTime: s.end_time,
+                              licensePlate: s.license_plate,
+                              durationHours: Number(s.duration_hours) || 1,
+                              startTime: s.entry_time,
+                              totalExtendedHours: s.total_extended_hours || 0,
+                            }
+                          };
+                          setExtendSpot(enriched);
+                        }} />)}
                     </tbody>
                   </table>
                 </div>
@@ -449,7 +473,7 @@ export default function AdminPage({ user, onLogout }) {
         {/* History Tab */}
         {activeTab === 'history' && (
           <div className="space-y-6">
-            <div><h2 className="text-2xl font-bold text-slate-900">Session History</h2><p className="text-slate-500 text-sm">{completedSessions.length} completed sessions · Total revenue: ${completedSessions.reduce((s, x) => s + (x.total_amount || 0), 0).toFixed(2)}</p></div>
+            <div><h2 className="text-2xl font-bold text-slate-900">Session History</h2><p className="text-slate-500 text-sm">{completedSessions.length} completed sessions · Total revenue: ${completedSessions.reduce((s, x) => s + Number(x.total_amount || 0), 0).toFixed(2)}</p></div>
             {completedSessions.length > 0 ? (
               <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
                 <div className="overflow-x-auto">
@@ -568,7 +592,7 @@ export default function AdminPage({ user, onLogout }) {
                   <div className="space-y-3">
                     <div className="flex justify-between items-center bg-green-50 rounded-xl p-3">
                       <span className="text-slate-600 text-sm">Completed Sessions</span>
-                      <span className="font-bold text-green-700">₹{completedSessions.reduce((s, x) => s + (x.total_amount || 0), 0).toFixed(2)}</span>
+                      <span className="font-bold text-green-700">₹{completedSessions.reduce((s, x) => s + Number(x.total_amount || 0), 0).toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between items-center bg-blue-50 rounded-xl p-3">
                       <span className="text-slate-600 text-sm">Active Sessions (est.)</span>
