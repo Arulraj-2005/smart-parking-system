@@ -7,22 +7,26 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// https://vite.dev/config/
 export default defineConfig({
-  // This is the critical setting for GitHub Pages.
-  // It tells Vite to prefix all asset URLs with your repository name.
   base: '/',
   plugins: [
     react(),
     tailwindcss(),
-    // viteSingleFile() // <-- REMOVE this plugin for GitHub Pages
   ],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),
     },
   },
-  // You can also keep the proxy for local development
+  // Prevent Vite from bundling server-only Node.js packages into the frontend build
+  optimizeDeps: {
+    exclude: ['razorpay', 'pg', 'bcryptjs', 'jsonwebtoken', 'express', 'cors', 'dotenv'],
+  },
+  build: {
+    rollupOptions: {
+      external: ['razorpay', 'crypto', 'pg', 'bcryptjs', 'jsonwebtoken', 'express', 'cors', 'dotenv'],
+    },
+  },
   server: {
     port: 5173,
     proxy: {
